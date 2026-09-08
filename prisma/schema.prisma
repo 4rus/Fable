@@ -1,0 +1,260 @@
+// ─────────────────────────────────────────────────────────────────────────
+// FINANCIAL DATA MODEL — read before changing anything in here.
+//
+// ACCOUNTING MODEL (be honest about what this is):
+// This is CASH-BASIS, SINGLE-ENTRY bookkeeping, not GAAP double-entry
+// accounting. We track money in (Payments) and money out (Expenses) against
+// a manually-entered starting cash balance. We do NOT maintain a chart of
+// accounts, debits/credits, or a balance sheet. This is a deliberate scope
+// decision (see Product Thesis "NOT BUILDING": full accrual bookkeeping) —
+// it is enough to give an owner an honest, explainable cash picture, and it
+// is simple enough that nothing here can silently drift out of balance the
+// way a fake half-implemented double-entry system could. If we ever need
+// accrual accounting or a real balance sheet, that is a deliberate,
+// separately-designed migration — do not bolt it on ad hoc.
+//
+// MONEY: all monetary amounts are stored as INTEGER MINOR UNITS (cents),
+// never floats. See src/lib/money.ts — that module is the only place
+// money math should happen.
+//
+// TENANCY: every business-owned row carries `businessId` directly (not
+// inferred through a join). Every query MUST filter by a businessId that
+// was derived server-side from the authenticated user's membership — never
+// from a client-supplied value. See src/server/tenant.ts.
+// ─────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // swap to "postgresql" + a real DATABASE_URL for staging/prod
+  url      = env("DATABASE_URL")
+}
+
+// ── Identity ────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships Membership[]
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+/// NOTE ON ENUMS: SQLite (our local-dev provider) has no native enum type,
+/// and we want dev/prod schemas to stay identical when we point
+/// DATABASE_URL at Postgres — so enum-shaped fields below are plain
+/// Strings with the allowed values documented in a comment and enforced by
+/// the shared TS union types in src/lib/types.ts + Zod schemas at every
+/// write path. Never write one of these columns without going through
+/// those types.
+
+/// The ONLY table that connects a User to a Business. Every authorization
+/// check in the app goes: session.userId -> Membership(status=ACTIVE) -> businessId.
+model Membership {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  role       String   @default("OWNER") // "OWNER" | "MEMBER" — see src/lib/types.ts
+  status     String   @default("ACTIVE") // "ACTIVE" | "REVOKED"
+  createdAt  DateTime @default(now())
+  revokedAt  DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+  @@map("memberships")
+}
+
+// ── Tenant ──────────────────────────────────────────────────────────────
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String   @default("America/New_York")
+  currency  String   @default("USD") // v1 is single-currency by design; see thesis exclusions
+
+  /// Manually-entered starting point for cash calculations until a real
+  /// bank feed exists. `startingCashCents` is the known cash balance AS OF
+  /// `startingCashAsOf`. Cash position after that date = starting balance
+  /// + payments received - expenses incurred, both filtered to > asOf.
+  startingCashCents Int      @default(0)
+  startingCashAsOf  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  memberships Membership[]
+  customers   Customer[]
+  categories  Category[]
+  invoices    Invoice[]
+  payments    Payment[]
+  expenses    Expense[]
+  auditLogs   AuditLog[]
+
+  @@map("businesses")
+}
+
+// ── Customers / Revenue side ───────────────────────────────────────────
+
+model Customer {
+  id         String    @id @default(cuid())
+  businessId String
+  name       String
+  email      String?
+  phone      String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@index([businessId])
+  @@map("customers")
+}
+
+/// `status` ("DRAFT" | "SENT" | "PARTIALLY_PAID" | "PAID" | "VOID" — see
+/// src/lib/types.ts) is a CACHE recomputed server-side inside a transaction
+/// every time a payment is recorded/removed (see
+/// src/server/services/invoices.ts). It must never be trusted as
+/// authoritative on its own — the sum of non-voided Payments against
+/// `totalCents` is the source of truth. "Overdue" is intentionally NOT a
+/// stored status: it's derived at read time from (dueDate < now && status
+/// in SENT/PARTIALLY_PAID) so it can never go stale.
+model Invoice {
+  id            String    @id @default(cuid())
+  businessId    String
+  customerId    String
+  number        String
+  issueDate     DateTime  @default(now())
+  dueDate       DateTime
+  status        String    @default("DRAFT")
+  subtotalCents Int
+  taxCents      Int       @default(0)
+  totalCents    Int
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  business  Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer  Customer          @relation(fields: [customerId], references: [id])
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@unique([businessId, number])
+  @@index([businessId, status])
+  @@index([businessId, dueDate])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id            String @id @default(cuid())
+  invoiceId     String
+  description   String
+  quantity      Int    @default(1)
+  unitPriceCents Int
+  amountCents   Int // quantity * unitPriceCents, computed server-side, never trusted from client
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+/// A payment received against an invoice. Partial payments are a first-
+/// class case: an invoice can have many payments whose sum is <= totalCents
+/// (enforced in the service layer inside a DB transaction, not just in UI).
+model Payment {
+  id           String   @id @default(cuid())
+  businessId   String
+  invoiceId    String
+  amountCents  Int
+  method       String   @default("other") // "cash" | "check" | "card" | "bank_transfer" | "other"
+  paidAt       DateTime @default(now())
+  note         String?
+  createdAt    DateTime @default(now())
+  voidedAt     DateTime?
+
+  /// Prevents a duplicated network retry from recording the same payment
+  /// twice. Caller (client or import job) generates this once per logical
+  /// payment attempt.
+  idempotencyKey String? @unique
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoice  Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([businessId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+// ── Expenses / Cash-out side ───────────────────────────────────────────
+
+model Category {
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  type       String // "INCOME" | "EXPENSE" — see src/lib/types.ts
+  isSystem   Boolean  @default(false) // seeded default categories vs. user-created
+  createdAt  DateTime @default(now())
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([businessId, name, type])
+  @@map("categories")
+}
+
+model Expense {
+  id          String    @id @default(cuid())
+  businessId  String
+  categoryId  String
+  vendorName  String
+  amountCents Int
+  incurredAt  DateTime  @default(now())
+  description String?
+  isRecurring Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@index([businessId, incurredAt])
+  @@map("expenses")
+}
+
+// ── Audit trail ─────────────────────────────────────────────────────────
+
+/// Append-only. Never update or delete rows in this table from application
+/// code. If a mutation matters for money or access, it gets logged here.
+model AuditLog {
+  id         String   @id @default(cuid())
+  businessId String?
+  userId     String?
+  action     String // e.g. "invoice.create", "payment.record", "membership.revoke"
+  entityType String
+  entityId   String
+  metadata   String? // JSON-encoded, non-sensitive context only
+  createdAt  DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@map("audit_logs")
+}
