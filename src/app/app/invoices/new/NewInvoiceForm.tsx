@@ -11,11 +11,7 @@ type Line = { description: string; quantity: number; unitPriceDollars: number };
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-    >
+    <button type="submit" disabled={pending} className="btn-primary">
       {pending ? "Creating…" : "Create invoice"}
     </button>
   );
@@ -52,14 +48,14 @@ export default function NewInvoiceForm({
   const inTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="card space-y-5 p-6">
       <input type="hidden" name="businessId" value={businessId} />
       <input type="hidden" name="lineItems" value={lineItemsPayload} />
       <input type="hidden" name="taxCents" value={Math.round(taxDollars * 100)} />
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-500">Customer</label>
-        <select name="customerId" required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+        <label className="field-label">Customer</label>
+        <select name="customerId" required className="field">
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -70,31 +66,31 @@ export default function NewInvoiceForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Issue date</label>
-          <input type="date" name="issueDate" defaultValue={today} required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <label className="field-label">Issue date</label>
+          <input type="date" name="issueDate" defaultValue={today} required className="field" />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-500">Due date</label>
-          <input type="date" name="dueDate" defaultValue={inTwoWeeks} required className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <label className="field-label">Due date</label>
+          <input type="date" name="dueDate" defaultValue={inTwoWeeks} required className="field" />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-xs font-medium text-slate-500">Line items</label>
+        <label className="field-label">Line items</label>
         {lines.map((line, i) => (
           <div key={i} className="flex gap-2">
             <input
               placeholder="Description"
               value={line.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
-              className="flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="field flex-1"
             />
             <input
               type="number"
               min={1}
               value={line.quantity}
               onChange={(e) => updateLine(i, { quantity: Number(e.target.value) })}
-              className="w-16 rounded-md border border-slate-300 px-2 py-2 text-sm"
+              className="field w-16"
             />
             <input
               type="number"
@@ -103,7 +99,7 @@ export default function NewInvoiceForm({
               placeholder="Unit price"
               value={line.unitPriceDollars}
               onChange={(e) => updateLine(i, { unitPriceDollars: Number(e.target.value) })}
-              className="w-28 rounded-md border border-slate-300 px-2 py-2 text-sm"
+              className="field w-28"
             />
             <button
               type="button"
@@ -123,28 +119,28 @@ export default function NewInvoiceForm({
         </button>
       </div>
 
-      <div className="flex items-center justify-end gap-6 border-t border-slate-100 pt-4 text-sm">
+      <div className="flex items-center justify-end gap-6 border-t border-line pt-4 text-sm">
         <div>
-          <span className="text-slate-500">Subtotal: </span>
-          <span className="font-medium tabular-nums">${subtotal.toFixed(2)}</span>
+          <span className="text-muted">Subtotal: </span>
+          <span className="font-medium tabular-nums text-ink">${subtotal.toFixed(2)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-slate-500">Tax ($)</label>
+          <label className="text-muted">Tax ($)</label>
           <input
             type="number"
             min={0}
             step="0.01"
             value={taxDollars}
             onChange={(e) => setTaxDollars(Number(e.target.value))}
-            className="w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            className="field w-20 px-2 py-1"
           />
         </div>
-        <div className="text-base font-semibold tabular-nums">${total.toFixed(2)}</div>
+        <div className="text-base font-semibold tabular-nums text-ink">${total.toFixed(2)}</div>
       </div>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-500">Notes (optional)</label>
-        <textarea name="notes" rows={2} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+        <label className="field-label">Notes (optional)</label>
+        <textarea name="notes" rows={2} className="field" />
       </div>
 
       {state.error && <p className="text-sm text-bad">{state.error}</p>}

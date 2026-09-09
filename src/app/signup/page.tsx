@@ -2,6 +2,7 @@
 
 import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
+import { LogoMark } from "@/components/icons";
 import { signupAction, type SignupFormState } from "@/server/actions/auth";
 
 const initialState: SignupFormState = {};
@@ -9,11 +10,7 @@ const initialState: SignupFormState = {};
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
-    <button
-      type="submit"
-      disabled={pending}
-      className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-    >
+    <button type="submit" disabled={pending} className="btn-primary w-full">
       {pending ? "Creating account…" : "Create account"}
     </button>
   );
@@ -23,36 +20,45 @@ export default function SignupPage() {
   const [state, formAction] = useFormState(signupAction, initialState);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="mb-1 text-2xl font-semibold text-ink">Set up your business</h1>
-      <p className="mb-8 text-sm text-slate-500">
-        Two minutes, then you&apos;ll see something useful about your numbers.
-      </p>
+    <main className="flex min-h-screen items-center justify-center bg-canvas px-6">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 flex items-center gap-2">
+          <LogoMark className="text-ink" />
+          <span className="text-[15px] font-semibold tracking-tight text-ink">Financial OS</span>
+        </div>
 
-      {state.error && (
-        <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-bad">{state.error}</p>
-      )}
+        <div className="card p-7">
+          <h1 className="text-lg font-semibold tracking-tight text-ink">Set up your business</h1>
+          <p className="mt-1 text-sm text-muted">
+            Two minutes, then you&apos;ll see something useful about your numbers.
+          </p>
 
-      <form action={formAction} className="space-y-4">
-        <Field name="name" label="Your name" type="text" autoComplete="name" />
-        <Field name="email" label="Email" type="email" autoComplete="email" />
-        <Field
-          name="password"
-          label="Password"
-          type="password"
-          autoComplete="new-password"
-          hint="At least 10 characters."
-        />
-        <Field name="businessName" label="Business name" type="text" autoComplete="organization" />
-        <SubmitButton />
-      </form>
+          {state.error && (
+            <p className="mt-4 rounded-lg bg-bad-soft px-3 py-2 text-sm text-bad">{state.error}</p>
+          )}
 
-      <p className="mt-6 text-center text-sm text-slate-500">
-        Already have an account?{" "}
-        <Link href="/login" className="font-medium text-accent hover:underline">
-          Sign in
-        </Link>
-      </p>
+          <form action={formAction} className="mt-6 space-y-4">
+            <Field name="name" label="Your name" type="text" autoComplete="name" />
+            <Field name="email" label="Email" type="email" autoComplete="email" />
+            <Field
+              name="password"
+              label="Password"
+              type="password"
+              autoComplete="new-password"
+              hint="At least 10 characters."
+            />
+            <Field name="businessName" label="Business name" type="text" autoComplete="organization" />
+            <SubmitButton />
+          </form>
+        </div>
+
+        <p className="mt-6 text-center text-sm text-muted">
+          Already have an account?{" "}
+          <Link href="/login" className="font-medium text-accent hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </main>
   );
 }
@@ -66,13 +72,13 @@ function Field(props: {
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-slate-700">{props.label}</label>
+      <label className="field-label">{props.label}</label>
       <input
         name={props.name}
         type={props.type}
         required
         autoComplete={props.autoComplete}
-        className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+        className="field"
       />
       {props.hint && <p className="mt-1 text-xs text-slate-400">{props.hint}</p>}
     </div>

@@ -25,24 +25,26 @@ export default async function ExpensesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-ink">Expenses</h1>
-        <p className="text-sm text-slate-500">What&apos;s going out, and where.</p>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Expenses</h1>
+        <p className="mt-1 text-sm text-muted">What&apos;s going out, and where.</p>
       </div>
 
       <NewExpenseForm businessId={business.id} categories={categories} />
 
-      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-        {expenses.length === 0 && <p className="p-5 text-sm text-slate-400">No expenses logged yet.</p>}
+      <div className="card divide-y divide-line">
+        {expenses.length === 0 && (
+          <p className="p-8 text-center text-sm text-muted">No expenses logged yet.</p>
+        )}
         {expenses.map((e) => (
-          <div key={e.id} className="flex items-center justify-between p-4">
+          <div key={e.id} className="flex items-center justify-between px-5 py-3.5">
             <div>
-              <p className="font-medium text-ink">{e.vendorName}</p>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm font-medium text-ink">{e.vendorName}</p>
+              <p className="mt-0.5 text-xs text-muted">
                 {e.category.name} · {e.incurredAt.toLocaleDateString()}
                 {e.isRecurring && " · recurring"}
               </p>
             </div>
-            <span className="tabular-nums text-sm font-medium text-ink">
+            <span className="text-sm font-medium tabular-nums text-ink">
               {formatCents(e.amountCents)}
             </span>
           </div>

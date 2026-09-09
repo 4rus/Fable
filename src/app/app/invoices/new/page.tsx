@@ -16,13 +16,15 @@ export default async function NewInvoicePage() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-ink">New invoice</h1>
-        <p className="text-sm text-slate-500">Totals are calculated for you — you can&apos;t edit them directly.</p>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">New invoice</h1>
+        <p className="mt-1 text-sm text-muted">
+          Totals are calculated for you — you can&apos;t edit them directly.
+        </p>
       </div>
       {customers.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-slate-200 p-5 text-sm text-slate-500">
-          Add a customer first before creating an invoice.
-        </p>
+        <div className="card p-8 text-center">
+          <p className="text-sm text-muted">Add a customer first before creating an invoice.</p>
+        </div>
       ) : (
         <NewInvoiceForm businessId={business.id} customers={customers} />
       )}

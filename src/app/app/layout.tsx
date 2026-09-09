@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/server/tenant";
 import { getMyBusinesses } from "@/server/services/businesses";
-import SignOutButton from "@/components/SignOutButton";
+import Sidebar from "@/components/Sidebar";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let ctx;
@@ -21,33 +20,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const business = businesses[0]!; // v1: single business per user; switcher is P1
 
   return (
-    <div className="min-h-screen">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-slate-400">{business.name}</p>
-            <nav className="mt-1 flex gap-5 text-sm font-medium">
-              <Link href="/app" className="text-ink hover:text-accent">
-                Overview
-              </Link>
-              <Link href="/app/invoices" className="text-ink hover:text-accent">
-                Invoices
-              </Link>
-              <Link href="/app/customers" className="text-ink hover:text-accent">
-                Customers
-              </Link>
-              <Link href="/app/expenses" className="text-ink hover:text-accent">
-                Expenses
-              </Link>
-              <Link href="/app/forecast" className="text-ink hover:text-accent">
-                Forecast
-              </Link>
-            </nav>
-          </div>
-          <SignOutButton />
-        </div>
-      </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+    <div className="flex min-h-screen">
+      <Sidebar businessName={business.name} userEmail={ctx.userEmail} />
+      <main className="flex-1 px-8 py-10 md:px-12">
+        <div className="mx-auto max-w-4xl">{children}</div>
+      </main>
     </div>
   );
 }

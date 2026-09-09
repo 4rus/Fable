@@ -5,6 +5,7 @@ import { getMyBusinesses } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
+import StatusChip from "@/components/StatusChip";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SendInvoiceButton from "./SendInvoiceButton";
 
@@ -36,54 +37,62 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     <div className="max-w-2xl space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-ink">
-            {invoice.number} — {invoice.customer.name}
+          <h1 className="text-xl font-semibold tracking-tight text-ink">
+            {invoice.number} <span className="text-muted">·</span> {invoice.customer.name}
           </h1>
-          <p className="text-sm text-slate-500">
-            Due {invoice.dueDate.toLocaleDateString()}
-            {overdue && <span className="ml-1 font-medium text-bad">· overdue</span>}
-          </p>
+          <div className="mt-1.5 flex items-center gap-2 text-sm text-muted">
+            <span>
+              Due {invoice.dueDate.toLocaleDateString()}
+              {overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
+            </span>
+            <span>·</span>
+            <StatusChip status={invoice.status} />
+          </div>
         </div>
         {invoice.status === "DRAFT" && (
           <SendInvoiceButton businessId={business.id} invoiceId={invoice.id} />
         )}
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-5">
+      <div className="card p-6">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="pb-2">Description</th>
-              <th className="pb-2 text-right">Qty</th>
-              <th className="pb-2 text-right">Unit price</th>
-              <th className="pb-2 text-right">Amount</th>
+            <tr className="text-left text-xs uppercase tracking-wide text-muted">
+              <th className="pb-2 font-medium">Description</th>
+              <th className="pb-2 text-right font-medium">Qty</th>
+              <th className="pb-2 text-right font-medium">Unit price</th>
+              <th className="pb-2 text-right font-medium">Amount</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-line">
             {invoice.lineItems.map((li) => (
               <tr key={li.id}>
-                <td className="py-2">{li.description}</td>
-                <td className="py-2 text-right tabular-nums">{li.quantity}</td>
-                <td className="py-2 text-right tabular-nums">{formatCents(li.unitPriceCents)}</td>
-                <td className="py-2 text-right tabular-nums">{formatCents(li.amountCents)}</td>
+                <td className="py-2.5 text-ink">{li.description}</td>
+                <td className="py-2.5 text-right tabular-nums text-ink">{li.quantity}</td>
+                <td className="py-2.5 text-right tabular-nums text-ink">
+                  {formatCents(li.unitPriceCents)}
+                </td>
+                <td className="py-2.5 text-right tabular-nums text-ink">
+                  {formatCents(li.amountCents)}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <div className="mt-4 space-y-1 border-t border-slate-100 pt-3 text-right text-sm">
-          <p>
-            Subtotal <span className="ml-3 tabular-nums">{formatCents(invoice.subtotalCents)}</span>
+        <div className="mt-4 space-y-1.5 border-t border-line pt-4 text-right text-sm">
+          <p className="text-muted">
+            Subtotal <span className="ml-3 tabular-nums text-ink">{formatCents(invoice.subtotalCents)}</span>
           </p>
-          <p>
-            Tax <span className="ml-3 tabular-nums">{formatCents(invoice.taxCents)}</span>
+          <p className="text-muted">
+            Tax <span className="ml-3 tabular-nums text-ink">{formatCents(invoice.taxCents)}</span>
           </p>
-          <p className="font-semibold">
+          <p className="font-medium text-ink">
             Total <span className="ml-3 tabular-nums">{formatCents(invoice.totalCents)}</span>
           </p>
           <p className="text-good">
             Paid <span className="ml-3 tabular-nums">{formatCents(paid)}</span>
           </p>
-          <p className="font-semibold text-ink">
+          <p className="text-base font-semibold text-ink">
             Balance due <span className="ml-3 tabular-nums">{formatCents(due)}</span>
           </p>
         </div>
@@ -100,15 +109,15 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
       {invoice.payments.length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-medium text-slate-500">Payment history</h2>
-          <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+          <h2 className="mb-2 text-sm font-semibold text-ink">Payment history</h2>
+          <ul className="card divide-y divide-line">
             {invoice.payments.map((p) => (
-              <li key={p.id} className="flex justify-between p-3 text-sm">
-                <span>
+              <li key={p.id} className="flex justify-between px-4 py-3 text-sm">
+                <span className="text-muted">
                   {p.paidAt.toLocaleDateString()} · {p.method.replace("_", " ")}
                   {p.voidedAt && <span className="ml-2 text-bad">(voided)</span>}
                 </span>
-                <span className="tabular-nums">{formatCents(p.amountCents)}</span>
+                <span className="font-medium tabular-nums text-ink">{formatCents(p.amountCents)}</span>
               </li>
             ))}
           </ul>

@@ -4,14 +4,7 @@ import { getMyBusinesses } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
-
-const statusStyles: Record<string, string> = {
-  DRAFT: "bg-slate-100 text-slate-600",
-  SENT: "bg-blue-50 text-accent",
-  PARTIALLY_PAID: "bg-amber-50 text-warn",
-  PAID: "bg-green-50 text-good",
-  VOID: "bg-slate-100 text-slate-400 line-through",
-};
+import StatusChip from "@/components/StatusChip";
 
 export default async function InvoicesPage() {
   const { userId } = await requireUser();
@@ -28,43 +21,40 @@ export default async function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-ink">Invoices</h1>
-          <p className="text-sm text-slate-500">Track what you&apos;re owed.</p>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">Invoices</h1>
+          <p className="mt-1 text-sm text-muted">Track what you&apos;re owed.</p>
         </div>
-        <Link
-          href="/app/invoices/new"
-          className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
+        <Link href="/app/invoices/new" className="btn-primary">
           New invoice
         </Link>
       </div>
 
-      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
-        {invoices.length === 0 && <p className="p-5 text-sm text-slate-400">No invoices yet.</p>}
+      <div className="card divide-y divide-line">
+        {invoices.length === 0 && (
+          <p className="p-8 text-center text-sm text-muted">No invoices yet.</p>
+        )}
         {invoices.map((inv) => {
           const overdue = isOverdue(inv);
           return (
             <Link
               key={inv.id}
               href={`/app/invoices/${inv.id}`}
-              className="flex items-center justify-between p-4 hover:bg-slate-50"
+              className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-canvas"
             >
               <div>
-                <p className="font-medium text-ink">
-                  {inv.number} — {inv.customer.name}
+                <p className="text-sm font-medium text-ink">
+                  {inv.number} <span className="text-muted">·</span> {inv.customer.name}
                 </p>
-                <p className="text-xs text-slate-400">
+                <p className="mt-0.5 text-xs text-muted">
                   Due {inv.dueDate.toLocaleDateString()}
-                  {overdue && <span className="ml-1 font-medium text-bad">· overdue</span>}
+                  {overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="tabular-nums text-sm text-ink">
-                  {formatCents(balanceDueCents(inv))} due
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium tabular-nums text-ink">
+                  {formatCents(balanceDueCents(inv))}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusStyles[inv.status]}`}>
-                  {inv.status.replace("_", " ").toLowerCase()}
-                </span>
+                <StatusChip status={inv.status} />
               </div>
             </Link>
           );
