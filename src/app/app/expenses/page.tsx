@@ -2,6 +2,7 @@ import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import NewExpenseForm from "./NewExpenseForm";
+import ExpenseAttachments from "./ExpenseAttachments";
 
 export default async function ExpensesPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
@@ -10,7 +11,7 @@ export default async function ExpensesPage() {
   const [expenses, categories] = await Promise.all([
     prisma.expense.findMany({
       where: { businessId: business.id, deletedAt: null },
-      include: { category: true },
+      include: { category: true, attachments: { orderBy: { createdAt: "desc" } } },
       orderBy: { incurredAt: "desc" },
       take: 100,
     }),
@@ -40,17 +41,24 @@ export default async function ExpensesPage() {
       ) : (
         <div className="field-surface divide-y divide-line">
           {expenses.map((e) => (
-            <div key={e.id} className="flex items-center justify-between px-5 py-3.5">
-              <div>
-                <p className="text-sm font-medium text-ink">{e.vendorName}</p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {e.category.name} · {e.incurredAt.toLocaleDateString()}
-                  {e.isRecurring && " · recurring"}
-                </p>
+            <div key={e.id} className="px-5 py-3.5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-ink">{e.vendorName}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {e.category.name} · {e.incurredAt.toLocaleDateString()}
+                    {e.isRecurring && " · recurring"}
+                  </p>
+                </div>
+                <span className="text-sm font-medium tabular-nums text-ink">
+                  {formatCents(e.amountCents)}
+                </span>
               </div>
-              <span className="text-sm font-medium tabular-nums text-ink">
-                {formatCents(e.amountCents)}
-              </span>
+              <ExpenseAttachments
+                businessId={business.id}
+                expenseId={e.id}
+                attachments={e.attachments.map((a) => ({ id: a.id, filename: a.filename }))}
+              />
             </div>
           ))}
         </div>

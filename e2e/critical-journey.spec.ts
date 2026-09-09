@@ -60,6 +60,32 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     await expect(page.getByText(customerName)).toBeVisible();
   });
 
+  await test.step("log an expense and attach a receipt", async () => {
+    await page.goto("/app/expenses");
+    await page.getByLabel("Vendor").fill("E2E Test Supplier");
+    await page.getByLabel("Amount ($)").fill("42.50");
+    await page.getByRole("button", { name: "Add expense" }).click();
+    await expect(page.getByText("E2E Test Supplier")).toBeVisible();
+
+    // Real PNG magic bytes — the upload path sniffs actual file content,
+    // not the claimed filename/mimeType, so this has to be genuine.
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "receipt.png",
+      mimeType: "image/png",
+      buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
+    });
+
+    const receiptLink = page.getByRole("link", { name: "receipt.png" });
+    await expect(receiptLink).toBeVisible({ timeout: 10_000 });
+
+    // Confirm the download route actually serves it (authorized fetch,
+    // not just that a link with the right text rendered).
+    const href = await receiptLink.getAttribute("href");
+    const response = await page.request.get(href!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toBe("image/png");
+  });
+
   let invoiceUrl = "";
 
   await test.step("create an invoice with the total computed automatically", async () => {
@@ -101,8 +127,8 @@ test("signup → invoice → payment → insight", async ({ page }) => {
 
   await test.step("the dashboard reflects the real cash position after the payment", async () => {
     await page.goto("/app");
-    // $200 was collected and nothing spent — cash on hand should be $200,
-    // not a fabricated or stale number.
-    await expect(page.getByText("$200").first()).toBeVisible();
+    // $200 collected minus the $42.50 expense = $157.50 — the real number,
+    // not a fabricated or stale one.
+    await expect(page.getByText("$157.50").first()).toBeVisible();
   });
 });

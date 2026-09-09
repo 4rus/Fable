@@ -59,12 +59,12 @@ model User {
 /// The ONLY table that connects a User to a Business. Every authorization
 /// check in the app goes: session.userId -> Membership(status=ACTIVE) -> businessId.
 model Membership {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   userId     String
   businessId String
-  role       String   @default("OWNER") // "OWNER" | "MEMBER" — see src/lib/types.ts
-  status     String   @default("ACTIVE") // "ACTIVE" | "REVOKED"
-  createdAt  DateTime @default(now())
+  role       String    @default("OWNER") // "OWNER" | "MEMBER" — see src/lib/types.ts
+  status     String    @default("ACTIVE") // "ACTIVE" | "REVOKED"
+  createdAt  DateTime  @default(now())
   revokedAt  DateTime?
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -78,10 +78,10 @@ model Membership {
 // ── Tenant ──────────────────────────────────────────────────────────────
 
 model Business {
-  id        String   @id @default(cuid())
-  name      String
-  timezone  String   @default("America/New_York")
-  currency  String   @default("USD") // v1 is single-currency by design; see thesis exclusions
+  id       String @id @default(cuid())
+  name     String
+  timezone String @default("America/New_York")
+  currency String @default("USD") // v1 is single-currency by design; see thesis exclusions
 
   /// Manually-entered starting point for cash calculations until a real
   /// bank feed exists. `startingCashCents` is the known cash balance AS OF
@@ -90,8 +90,8 @@ model Business {
   startingCashCents Int      @default(0)
   startingCashAsOf  DateTime @default(now())
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
   memberships Membership[]
@@ -100,6 +100,7 @@ model Business {
   invoices    Invoice[]
   payments    Payment[]
   expenses    Expense[]
+  attachments Attachment[]
   auditLogs   AuditLog[]
 
   @@map("businesses")
@@ -161,12 +162,12 @@ model Invoice {
 }
 
 model InvoiceLineItem {
-  id            String @id @default(cuid())
-  invoiceId     String
-  description   String
-  quantity      Int    @default(1)
+  id             String @id @default(cuid())
+  invoiceId      String
+  description    String
+  quantity       Int    @default(1)
   unitPriceCents Int
-  amountCents   Int // quantity * unitPriceCents, computed server-side, never trusted from client
+  amountCents    Int // quantity * unitPriceCents, computed server-side, never trusted from client
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
@@ -178,15 +179,15 @@ model InvoiceLineItem {
 /// class case: an invoice can have many payments whose sum is <= totalCents
 /// (enforced in the service layer inside a DB transaction, not just in UI).
 model Payment {
-  id           String   @id @default(cuid())
-  businessId   String
-  invoiceId    String
-  amountCents  Int
-  method       String   @default("other") // "cash" | "check" | "card" | "bank_transfer" | "other"
-  paidAt       DateTime @default(now())
-  note         String?
-  createdAt    DateTime @default(now())
-  voidedAt     DateTime?
+  id          String    @id @default(cuid())
+  businessId  String
+  invoiceId   String
+  amountCents Int
+  method      String    @default("other") // "cash" | "check" | "card" | "bank_transfer" | "other"
+  paidAt      DateTime  @default(now())
+  note        String?
+  createdAt   DateTime  @default(now())
+  voidedAt    DateTime?
 
   /// Prevents a duplicated network retry from recording the same payment
   /// twice. Caller (client or import job) generates this once per logical
@@ -231,11 +232,37 @@ model Expense {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id])
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category    Category     @relation(fields: [categoryId], references: [id])
+  attachments Attachment[]
 
   @@index([businessId, incurredAt])
   @@map("expenses")
+}
+
+/// A receipt/document attached to an expense. `storageKey` is an opaque
+/// path into the storage backend (local disk in dev — see
+/// src/server/services/attachments.ts — object storage in production) and
+/// is NEVER exposed directly to a client; every download goes through
+/// /api/attachments/[id], which re-checks tenant membership before
+/// streaming a single byte. Never a public/guessable URL.
+model Attachment {
+  id               String   @id @default(cuid())
+  businessId       String
+  expenseId        String
+  filename         String // original filename, sanitized before display — never used to build a filesystem path
+  storageKey       String   @unique
+  mimeType         String // sniffed from real file content, not the client's claimed Content-Type
+  sizeBytes        Int
+  uploadedByUserId String?
+  createdAt        DateTime @default(now())
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expense  Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([expenseId])
+  @@map("attachments")
 }
 
 // ── Audit trail ─────────────────────────────────────────────────────────
