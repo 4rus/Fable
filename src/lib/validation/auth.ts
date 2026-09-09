@@ -12,4 +12,14 @@ export const signupSchema = z.object({
   // users toward predictable patterns. bcrypt cost factor does the real work.
   password: z.string().min(10).max(200),
   businessName: z.string().trim().min(1).max(200),
+  currency: z.enum(["USD", "CAD"]).default("USD"),
+});
+
+export const requestPasswordResetSchema = z.object({
+  email: z.string().trim().toLowerCase().email(),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(10).max(200),
 });

@@ -22,6 +22,7 @@ export async function signUp(params: {
   email: string;
   password: string;
   businessName: string;
+  currency?: string;
 }) {
   const email = params.email.toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
@@ -33,7 +34,7 @@ export async function signUp(params: {
     const user = await tx.user.create({
       data: { name: params.name, email, passwordHash },
     });
-    const business = await createBusinessForUser(user.id, params.businessName, tx);
+    const business = await createBusinessForUser(user.id, params.businessName, tx, params.currency ?? "USD");
     return { user, business };
   });
 }

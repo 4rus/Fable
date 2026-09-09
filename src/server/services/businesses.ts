@@ -84,11 +84,13 @@ export async function createBusinessForUser(
   userId: string,
   businessName: string,
   client: Prisma.TransactionClient | typeof prisma = prisma,
+  currency: string = "USD",
 ) {
   const run = async (tx: Prisma.TransactionClient | typeof prisma) => {
     const business = await tx.business.create({
       data: {
         name: businessName,
+        currency,
         memberships: { create: { userId, role: "OWNER", status: "ACTIVE" } },
         categories: {
           create: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, type: c.type, isSystem: true })),
