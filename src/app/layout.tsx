@@ -23,7 +23,18 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable}`}>
-      <body className="min-h-screen bg-canvas font-sans antialiased">{children}</body>
+      {/* suppressHydrationWarning here only covers this element's own
+          attributes — it does NOT suppress hydration mismatches in
+          children. It's needed because some browser extensions (e.g.
+          Grammarly) inject data-* attributes into <body> before React
+          hydrates, which otherwise trips a false-positive mismatch
+          warning that has nothing to do with our markup. */}
+      <body
+        className="min-h-screen bg-canvas font-sans antialiased"
+        suppressHydrationWarning
+      >
+        {children}
+      </body>
     </html>
   );
 }
