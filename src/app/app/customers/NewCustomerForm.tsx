@@ -21,12 +21,12 @@ export default function NewCustomerForm({ businessId }: { businessId: string }) 
     <form action={formAction} className="field-surface flex flex-wrap items-end gap-3 p-5">
       <input type="hidden" name="businessId" value={businessId} />
       <div>
-        <label className="field-label">Name</label>
-        <input name="name" required className="field" />
+        <label htmlFor="customer-name" className="field-label">Name</label>
+        <input id="customer-name" name="name" required className="field" />
       </div>
       <div>
-        <label className="field-label">Email (optional)</label>
-        <input name="email" type="email" className="field" />
+        <label htmlFor="customer-email" className="field-label">Email (optional)</label>
+        <input id="customer-email" name="email" type="email" className="field" />
       </div>
       <SubmitButton />
       {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}

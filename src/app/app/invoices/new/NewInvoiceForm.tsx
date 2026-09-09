@@ -54,8 +54,8 @@ export default function NewInvoiceForm({
       <input type="hidden" name="taxCents" value={Math.round(taxDollars * 100)} />
 
       <div>
-        <label className="field-label">Customer</label>
-        <select name="customerId" required className="field">
+        <label htmlFor="invoice-customer" className="field-label">Customer</label>
+        <select id="invoice-customer" name="customerId" required className="field">
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -66,26 +66,28 @@ export default function NewInvoiceForm({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="field-label">Issue date</label>
-          <input type="date" name="issueDate" defaultValue={today} required className="field" />
+          <label htmlFor="invoice-issue-date" className="field-label">Issue date</label>
+          <input id="invoice-issue-date" type="date" name="issueDate" defaultValue={today} required className="field" />
         </div>
         <div>
-          <label className="field-label">Due date</label>
-          <input type="date" name="dueDate" defaultValue={inTwoWeeks} required className="field" />
+          <label htmlFor="invoice-due-date" className="field-label">Due date</label>
+          <input id="invoice-due-date" type="date" name="dueDate" defaultValue={inTwoWeeks} required className="field" />
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="field-label">Line items</label>
+        <span className="field-label">Line items</span>
         {lines.map((line, i) => (
           <div key={i} className="flex gap-2">
             <input
+              aria-label={`Line ${i + 1} description`}
               placeholder="Description"
               value={line.description}
               onChange={(e) => updateLine(i, { description: e.target.value })}
               className="field flex-1"
             />
             <input
+              aria-label={`Line ${i + 1} quantity`}
               type="number"
               min={1}
               value={line.quantity}
@@ -93,6 +95,7 @@ export default function NewInvoiceForm({
               className="field w-16"
             />
             <input
+              aria-label={`Line ${i + 1} unit price`}
               type="number"
               min={0}
               step="0.01"
@@ -125,8 +128,9 @@ export default function NewInvoiceForm({
           <span className="font-medium tabular-nums text-ink">${subtotal.toFixed(2)}</span>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-muted">Tax ($)</label>
+          <label htmlFor="invoice-tax" className="text-muted">Tax ($)</label>
           <input
+            id="invoice-tax"
             type="number"
             min={0}
             step="0.01"
@@ -139,8 +143,8 @@ export default function NewInvoiceForm({
       </div>
 
       <div>
-        <label className="field-label">Notes (optional)</label>
-        <textarea name="notes" rows={2} className="field" />
+        <label htmlFor="invoice-notes" className="field-label">Notes (optional)</label>
+        <textarea id="invoice-notes" name="notes" rows={2} className="field" />
       </div>
 
       {state.error && <p className="text-sm text-bad">{state.error}</p>}

@@ -13,5 +13,12 @@ prisma/dev.db
 prisma/dev.db-journal
 tests/test.db
 tests/test.db-journal
+e2e/e2e.db
+e2e/e2e.db-journal
+test-results
+playwright-report
+blob-report
+playwright/.cache
 *.tsbuildinfo
 coverage
+uploads

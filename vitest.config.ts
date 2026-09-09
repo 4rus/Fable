@@ -8,6 +8,10 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     testTimeout: 20000,
     hookTimeout: 20000,
+    // e2e/ holds Playwright specs (a different `test` global, run via
+    // `npm run test:e2e`) — excluded here so Vitest doesn't try to collect
+    // them as its own tests.
+    exclude: ["**/node_modules/**", "**/e2e/**"],
   },
   resolve: {
     alias: {

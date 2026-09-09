@@ -21,12 +21,12 @@ export default function AddMemberForm({ businessId }: { businessId: string }) {
     <form action={formAction} className="field-surface space-y-3 p-5">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1">
-          <label className="field-label">Email</label>
-          <input name="email" type="email" required placeholder="teammate@example.com" className="field" />
+          <label htmlFor="member-email" className="field-label">Email</label>
+          <input id="member-email" name="email" type="email" required placeholder="teammate@example.com" className="field" />
         </div>
         <div>
-          <label className="field-label">Role</label>
-          <select name="role" defaultValue="MEMBER" className="field">
+          <label htmlFor="member-role" className="field-label">Role</label>
+          <select id="member-role" name="role" defaultValue="MEMBER" className="field">
             <option value="MEMBER">Member</option>
             <option value="OWNER">Owner</option>
           </select>

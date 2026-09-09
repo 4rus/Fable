@@ -72,8 +72,9 @@ function Field(props: {
 }) {
   return (
     <div>
-      <label className="field-label">{props.label}</label>
+      <label htmlFor={props.name} className="field-label">{props.label}</label>
       <input
+        id={props.name}
         name={props.name}
         type={props.type}
         required

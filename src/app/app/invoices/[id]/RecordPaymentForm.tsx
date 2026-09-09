@@ -38,8 +38,9 @@ export default function RecordPaymentForm({
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
 
       <div>
-        <label className="field-label">Amount ($)</label>
+        <label htmlFor="payment-amount" className="field-label">Amount ($)</label>
         <input
+          id="payment-amount"
           name="amountDollars"
           type="number"
           min={0.01}
@@ -51,8 +52,8 @@ export default function RecordPaymentForm({
         />
       </div>
       <div>
-        <label className="field-label">Method</label>
-        <select name="method" className="field">
+        <label htmlFor="payment-method" className="field-label">Method</label>
+        <select id="payment-method" name="method" className="field">
           <option value="bank_transfer">Bank transfer</option>
           <option value="card">Card</option>
           <option value="check">Check</option>
@@ -61,8 +62,8 @@ export default function RecordPaymentForm({
         </select>
       </div>
       <div>
-        <label className="field-label">Date</label>
-        <input name="paidAt" type="date" defaultValue={today} className="field" />
+        <label htmlFor="payment-date" className="field-label">Date</label>
+        <input id="payment-date" name="paidAt" type="date" defaultValue={today} className="field" />
       </div>
       <SubmitButton />
       {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}
