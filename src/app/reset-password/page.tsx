@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { Suspense, useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -18,7 +18,27 @@ function SubmitButton() {
   );
 }
 
+// useSearchParams() (reading ?token=) opts this tree out of static
+// prerendering unless wrapped in Suspense — see the same note in
+// src/app/login/page.tsx.
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthShell
+          statement="A fresh password, same clear picture of your business."
+          support="Choose a new password below — you'll be able to sign in right away."
+        >
+          <div className="h-64" aria-hidden />
+        </AuthShell>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token") ?? "";

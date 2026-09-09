@@ -84,4 +84,19 @@ describe("resetPassword", () => {
 
     await expect(resetPassword(first.token, "another-password")).rejects.toThrow(InvalidResetTokenError);
   });
+
+  it("writes an audit log entry for the reset, with no token/password material in it", async () => {
+    const user = await createTestUser();
+    const { token } = (await requestPasswordReset(user.email))!;
+
+    await resetPassword(token, "a-brand-new-password");
+
+    const entry = await prisma.auditLog.findFirst({
+      where: { userId: user.id, action: "auth.password_reset" },
+    });
+    expect(entry).toBeTruthy();
+    expect(entry!.entityId).toBe(user.id);
+    expect(JSON.stringify(entry)).not.toContain(token);
+    expect(JSON.stringify(entry)).not.toContain("a-brand-new-password");
+  });
 });

@@ -52,6 +52,12 @@ describe("sanitizeFilename", () => {
   it("falls back to a safe default for an empty/garbage name", () => {
     expect(sanitizeFilename("")).toBe("attachment");
   });
+
+  it("strips control characters (CR/LF) that could break or inject into a Content-Disposition header", () => {
+    const result = sanitizeFilename('receipt\r\nX-Injected: true.pdf');
+    expect(result).not.toContain("\r");
+    expect(result).not.toContain("\n");
+  });
 });
 
 async function makeExpense(businessId: string) {
