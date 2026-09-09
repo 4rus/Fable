@@ -37,7 +37,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
     <div className="max-w-2xl space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">
+          <h1 className="font-serif text-[26px] tracking-tight text-ink">
             {invoice.number} <span className="text-muted">·</span> {invoice.customer.name}
           </h1>
           <div className="mt-1.5 flex items-center gap-2 text-sm text-muted">
@@ -54,7 +54,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         )}
       </div>
 
-      <div className="card p-6">
+      <div className="field-surface p-6">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-muted">
@@ -110,7 +110,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       {invoice.payments.length > 0 && (
         <div>
           <h2 className="mb-2 text-sm font-semibold text-ink">Payment history</h2>
-          <ul className="card divide-y divide-line">
+          <ul className="field-surface divide-y divide-line">
             {invoice.payments.map((p) => (
               <li key={p.id} className="flex justify-between px-4 py-3 text-sm">
                 <span className="text-muted">

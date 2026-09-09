@@ -16,7 +16,7 @@ export default async function CustomersPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Customers</h1>
+        <h1 className="font-serif text-[26px] tracking-tight text-ink">Customers</h1>
         <p className="mt-1 text-sm text-muted">Who owes you money, and who might soon.</p>
       </div>
 
@@ -31,7 +31,7 @@ export default async function CustomersPage() {
           </p>
         </div>
       ) : (
-        <div className="card divide-y divide-line">
+        <div className="field-surface divide-y divide-line">
           {customers.map((c) => (
             <div key={c.id} className="flex items-center justify-between px-5 py-3.5">
               <div>

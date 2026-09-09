@@ -28,7 +28,7 @@ export default async function ForecastPage() {
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Forecast</h1>
+        <h1 className="font-serif text-[26px] tracking-tight text-ink">Forecast</h1>
         <p className="mt-1 text-sm text-muted">
           {dipsNegative
             ? "Your projected cash dips below zero within 90 days — see when, below."
@@ -51,7 +51,7 @@ export default async function ForecastPage() {
                   {formatCentsCompact(node.cents)}
                 </p>
                 {node.date && (
-                  <p className="mt-0.5 text-xs text-slate-400">
+                  <p className="mt-0.5 text-xs text-muted">
                     {new Date(node.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </p>
                 )}

@@ -18,7 +18,7 @@ export default function AddMemberForm({ businessId }: { businessId: string }) {
   const [state, formAction] = useFormState(addMemberAction, initialState);
 
   return (
-    <form action={formAction} className="card space-y-3 p-5">
+    <form action={formAction} className="field-surface space-y-3 p-5">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1">
           <label className="field-label">Email</label>

@@ -25,7 +25,7 @@ export default function NewExpenseForm({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <form action={formAction} className="card flex flex-wrap items-end gap-3 p-5">
+    <form action={formAction} className="field-surface flex flex-wrap items-end gap-3 p-5">
       <input type="hidden" name="businessId" value={businessId} />
       <div>
         <label className="field-label">Vendor</label>
@@ -49,7 +49,7 @@ export default function NewExpenseForm({
         <label className="field-label">Date</label>
         <input name="incurredAt" type="date" defaultValue={today} className="field" />
       </div>
-      <label className="flex items-center gap-1.5 pb-2.5 text-sm text-slate-600">
+      <label className="flex items-center gap-1.5 pb-2.5 text-sm text-muted">
         <input type="checkbox" name="isRecurring" className="rounded border-line" /> Recurring
       </label>
       <SubmitButton />

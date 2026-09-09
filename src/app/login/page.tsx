@@ -41,8 +41,8 @@ export default function LoginPage() {
           <span className="text-[15px] font-semibold tracking-tight text-ink">Financial OS</span>
         </div>
 
-        <div className="card p-7">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">Welcome back</h1>
+        <div className="field-surface p-7">
+          <h1 className="font-serif text-xl tracking-tight text-ink">Welcome back</h1>
           <p className="mt-1 text-sm text-muted">Sign in to see where your business stands.</p>
 
           {justCreated && (

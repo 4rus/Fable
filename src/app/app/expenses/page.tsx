@@ -25,7 +25,7 @@ export default async function ExpensesPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Expenses</h1>
+        <h1 className="font-serif text-[26px] tracking-tight text-ink">Expenses</h1>
         <p className="mt-1 text-sm text-muted">What&apos;s going out, and where.</p>
       </div>
 
@@ -40,7 +40,7 @@ export default async function ExpensesPage() {
           </p>
         </div>
       ) : (
-        <div className="card divide-y divide-line">
+        <div className="field-surface divide-y divide-line">
           {expenses.map((e) => (
             <div key={e.id} className="flex items-center justify-between px-5 py-3.5">
               <div>

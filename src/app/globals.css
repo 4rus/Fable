@@ -12,12 +12,26 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
+/*
+ * SPACING & TYPE SCALE (reference, enforced by convention not a plugin):
+ * Type:  12 / 13 / 14 / 15 / 17 / 20 / 26 / 34 / 56  (px, roughly a 1.2–1.3
+ *        ratio; the two largest sizes are always font-serif)
+ * Space: 2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 48 / 64 (Tailwind's default
+ *        scale used consistently — no arbitrary px values in components)
+ *
+ * SURFACE HIERARCHY:
+ * canvas  — the page background (warm paper, not white)
+ * surface — a real, bounded artifact sitting ON the canvas: a form, a
+ *           table of records, a modal. Gets a hairline border, never a
+ *           shadow-heavy "card".
+ * Bare canvas — everything else, including metrics and insights. A
+ *           number is not a card. A statement is not a card. If you're
+ *           reaching for `.field-surface` to wrap a single metric or an
+ *           insight, stop — that's the pattern this system exists to kill.
+ */
 @layer components {
-  /* Text inputs, selects, textareas — one definition, used everywhere via
-     the `.field` class instead of repeating a long utility string per
-     element. Keeps every form in the app visually identical by default. */
   .field {
-    @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-slate-400
+    @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink placeholder:text-muted/70
       transition-colors focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/15;
   }
   .field-label {
@@ -25,7 +39,7 @@ body {
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium
       transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
@@ -35,10 +49,12 @@ body {
     @apply btn border border-line bg-surface text-ink hover:bg-canvas;
   }
   .btn-ghost {
-    @apply btn text-muted hover:bg-canvas hover:text-ink;
+    @apply btn text-muted hover:text-ink;
   }
 
-  .card {
-    @apply rounded-xl border border-line bg-surface shadow-card;
+  /* A REAL, bounded surface — a form or a table of records. Not for
+     wrapping a single metric, statement, or insight. */
+  .field-surface {
+    @apply rounded-lg border border-line bg-surface;
   }
 }

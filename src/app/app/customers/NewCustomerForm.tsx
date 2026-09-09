@@ -18,7 +18,7 @@ export default function NewCustomerForm({ businessId }: { businessId: string }) 
   const [state, formAction] = useFormState(createCustomerAction, initialState);
 
   return (
-    <form action={formAction} className="card flex flex-wrap items-end gap-3 p-5">
+    <form action={formAction} className="field-surface flex flex-wrap items-end gap-3 p-5">
       <input type="hidden" name="businessId" value={businessId} />
       <div>
         <label className="field-label">Name</label>

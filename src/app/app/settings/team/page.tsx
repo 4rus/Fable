@@ -15,7 +15,7 @@ export default async function TeamPage() {
   return (
     <div className="max-w-xl space-y-8">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Team</h1>
+        <h1 className="font-serif text-[26px] tracking-tight text-ink">Team</h1>
         <p className="mt-1 text-sm text-muted">Who has access to {business.name}</p>
       </div>
 

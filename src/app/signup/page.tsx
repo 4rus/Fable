@@ -27,8 +27,8 @@ export default function SignupPage() {
           <span className="text-[15px] font-semibold tracking-tight text-ink">Financial OS</span>
         </div>
 
-        <div className="card p-7">
-          <h1 className="text-lg font-semibold tracking-tight text-ink">Set up your business</h1>
+        <div className="field-surface p-7">
+          <h1 className="font-serif text-xl tracking-tight text-ink">Set up your business</h1>
           <p className="mt-1 text-sm text-muted">
             Two minutes, then you&apos;ll see something useful about your numbers.
           </p>
@@ -80,7 +80,7 @@ function Field(props: {
         autoComplete={props.autoComplete}
         className="field"
       />
-      {props.hint && <p className="mt-1 text-xs text-slate-400">{props.hint}</p>}
+      {props.hint && <p className="mt-1 text-xs text-muted">{props.hint}</p>}
     </div>
   );
 }

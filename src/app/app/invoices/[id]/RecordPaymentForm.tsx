@@ -29,7 +29,7 @@ export default function RecordPaymentForm({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <form action={formAction} className="card flex flex-wrap items-end gap-3 p-5">
+    <form action={formAction} className="field-surface flex flex-wrap items-end gap-3 p-5">
       <input type="hidden" name="businessId" value={businessId} />
       <input type="hidden" name="invoiceId" value={invoiceId} />
       {/* Regenerated on every server render of this page (new page load =

@@ -211,6 +211,37 @@ export async function getAllInsights(businessId: string): Promise<Insight[]> {
   return results.filter((i): i is Insight => i !== null);
 }
 
+const severityRank: Record<InsightSeverity, number> = { critical: 0, attention: 1, info: 2 };
+
+export interface StatusSummary {
+  /** The opening statement of the Overview narrative — deliberately terse
+   * prose, not a "score". */
+  headline: string;
+  /** The single most important insight, meant to be woven into the page's
+   * opening narrative rather than shown as a generic list item. */
+  spotlight: Insight | null;
+  /** Everything else, in severity order. */
+  rest: Insight[];
+}
+
+/** Pure, deterministic, and unit-testable on its own: turns a set of
+ * insights into the one sentence and the one fact that should lead the
+ * Overview page, plus whatever's left for the "worth doing" list. */
+export function summarizeInsights(insights: Insight[]): StatusSummary {
+  if (insights.length === 0) {
+    return { headline: "You're in a good position.", spotlight: null, rest: [] };
+  }
+  const sorted = [...insights].sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+  const [spotlight, ...rest] = sorted;
+  const headline =
+    spotlight!.severity === "critical"
+      ? "You need to make a decision soon."
+      : spotlight!.severity === "attention"
+        ? "You're in a stable position, but a couple of things need attention."
+        : "You're in a good position.";
+  return { headline, spotlight: spotlight!, rest };
+}
+
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }

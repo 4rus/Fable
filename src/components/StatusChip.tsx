@@ -1,9 +1,9 @@
 const config: Record<string, { label: string; dot: string; text: string }> = {
-  DRAFT: { label: "Draft", dot: "bg-slate-300", text: "text-slate-500" },
+  DRAFT: { label: "Draft", dot: "bg-line", text: "text-muted" },
   SENT: { label: "Sent", dot: "bg-accent", text: "text-accent" },
   PARTIALLY_PAID: { label: "Partially paid", dot: "bg-warn", text: "text-warn" },
   PAID: { label: "Paid", dot: "bg-good", text: "text-good" },
-  VOID: { label: "Void", dot: "bg-slate-300", text: "text-slate-400" },
+  VOID: { label: "Void", dot: "bg-line", text: "text-muted" },
 };
 
 /** A quiet dot + label instead of a filled colored pill — reads as a

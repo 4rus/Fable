@@ -21,7 +21,7 @@ export default async function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Invoices</h1>
+          <h1 className="font-serif text-[26px] tracking-tight text-ink">Invoices</h1>
           <p className="mt-1 text-sm text-muted">Track what you&apos;re owed.</p>
         </div>
         <Link href="/app/invoices/new" className="btn-primary">
@@ -41,7 +41,7 @@ export default async function InvoicesPage() {
           </Link>
         </div>
       ) : (
-      <div className="card divide-y divide-line">
+      <div className="field-surface divide-y divide-line">
         {invoices.map((inv) => {
           const overdue = isOverdue(inv);
           return (

@@ -6,6 +6,8 @@ import {
   getOverdueInvoicesInsight,
   getRunwayWarningInsight,
   getAllInsights,
+  summarizeInsights,
+  type Insight,
 } from "@/server/services/insights";
 
 describe("getRunwayWarningInsight", () => {
@@ -72,5 +74,44 @@ describe("getAllInsights", () => {
     const evidenced = await prisma.invoice.findUnique({ where: { id: insight!.evidence[0]!.id } });
     expect(evidenced).not.toBeNull();
     expect(evidenced!.businessId).toBe(business.id);
+  });
+});
+
+function fakeInsight(overrides: Partial<Insight>): Insight {
+  return {
+    id: "test",
+    kind: "FACT",
+    severity: "info",
+    headline: "Something happened",
+    explanation: "Details",
+    why: "Because reasons",
+    basis: "Based on data",
+    evidence: [],
+    ...overrides,
+  };
+}
+
+describe("summarizeInsights (drives the Overview page narrative)", () => {
+  it("returns a plain positive headline with no spotlight when there are no insights", () => {
+    const result = summarizeInsights([]);
+    expect(result.spotlight).toBeNull();
+    expect(result.rest).toEqual([]);
+    expect(result.headline).toMatch(/good position/);
+  });
+
+  it("picks the most severe insight as the spotlight, regardless of input order", () => {
+    const info = fakeInsight({ id: "info", severity: "info" });
+    const critical = fakeInsight({ id: "critical", severity: "critical" });
+    const attention = fakeInsight({ id: "attention", severity: "attention" });
+
+    const result = summarizeInsights([info, attention, critical]);
+    expect(result.spotlight!.id).toBe("critical");
+    expect(result.rest.map((i) => i.id)).toEqual(["attention", "info"]);
+  });
+
+  it("escalates the headline tone with severity", () => {
+    expect(summarizeInsights([fakeInsight({ severity: "critical" })]).headline).toMatch(/decision soon/);
+    expect(summarizeInsights([fakeInsight({ severity: "attention" })]).headline).toMatch(/stable position/);
+    expect(summarizeInsights([fakeInsight({ severity: "info" })]).headline).toMatch(/good position/);
   });
 });

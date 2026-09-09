@@ -48,7 +48,7 @@ export default function NewInvoiceForm({
   const inTwoWeeks = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   return (
-    <form action={formAction} className="card space-y-5 p-6">
+    <form action={formAction} className="field-surface space-y-5 p-6">
       <input type="hidden" name="businessId" value={businessId} />
       <input type="hidden" name="lineItems" value={lineItemsPayload} />
       <input type="hidden" name="taxCents" value={Math.round(taxDollars * 100)} />
@@ -104,7 +104,7 @@ export default function NewInvoiceForm({
             <button
               type="button"
               onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
-              className="px-2 text-sm text-slate-400 hover:text-bad"
+              className="px-2 text-sm text-muted hover:text-bad"
             >
               ✕
             </button>

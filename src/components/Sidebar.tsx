@@ -123,12 +123,12 @@ function SidebarContent({
               href={item.href}
               onClick={onNavigate}
               className={
-                "relative flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13.5px] font-medium transition-colors " +
-                (active ? "bg-accent-soft text-accent" : "text-slate-600 hover:bg-canvas hover:text-ink")
+                "relative flex items-center gap-2.5 px-2.5 py-[7px] text-[13.5px] transition-colors " +
+                (active ? "font-medium text-ink" : "text-muted hover:text-ink")
               }
             >
-              {active && <span className="absolute -left-3 h-4 w-[3px] rounded-full bg-accent" />}
-              <ItemIcon className={active ? "text-accent" : "text-slate-400"} />
+              {active && <span className="absolute -left-3 h-4 w-[2px] bg-ink" />}
+              <ItemIcon className={active ? "text-ink" : "text-muted"} />
               {item.label}
             </Link>
           );
@@ -140,13 +140,11 @@ function SidebarContent({
           href="/app/settings/team"
           onClick={onNavigate}
           className={
-            "flex items-center gap-2.5 rounded-md px-2.5 py-[7px] text-[13.5px] font-medium transition-colors " +
-            (pathname?.startsWith("/app/settings")
-              ? "bg-accent-soft text-accent"
-              : "text-slate-600 hover:bg-canvas hover:text-ink")
+            "flex items-center gap-2.5 px-2.5 py-[7px] text-[13.5px] transition-colors " +
+            (pathname?.startsWith("/app/settings") ? "font-medium text-ink" : "text-muted hover:text-ink")
           }
         >
-          <SettingsIcon className={pathname?.startsWith("/app/settings") ? "text-accent" : "text-slate-400"} />
+          <SettingsIcon className={pathname?.startsWith("/app/settings") ? "text-ink" : "text-muted"} />
           Settings
         </Link>
       </div>
