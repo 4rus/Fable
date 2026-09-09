@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { createExpenseAction, type ActionState } from "@/server/actions/expenses";
 
 const initialState: ActionState = {};
@@ -21,7 +22,7 @@ export default function NewExpenseForm({
   businessId: string;
   categories: { id: string; name: string }[];
 }) {
-  const [state, formAction] = useFormState(createExpenseAction, initialState);
+  const [state, formAction] = useActionState(createExpenseAction, initialState);
   const today = new Date().toISOString().slice(0, 10);
 
   return (

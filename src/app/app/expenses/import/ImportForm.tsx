@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useActionState } from "react";
 import Link from "next/link";
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
 import {
   previewCsvImportAction,
   commitCsvImportAction,
@@ -40,8 +40,8 @@ export default function ImportForm({
   businessId: string;
   categories: { id: string; name: string }[];
 }) {
-  const [previewState, previewAction] = useFormState(previewCsvImportAction, initialPreviewState);
-  const [commitState, commitAction] = useFormState(commitCsvImportAction, initialCommitState);
+  const [previewState, previewAction] = useActionState(previewCsvImportAction, initialPreviewState);
+  const [commitState, commitAction] = useActionState(commitCsvImportAction, initialCommitState);
   const [included, setIncluded] = useState<Record<number, boolean>>({});
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? "");
 

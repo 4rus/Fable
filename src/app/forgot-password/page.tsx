@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import Link from "next/link";
 import AuthShell from "@/components/marketing/AuthShell";
 import { requestPasswordResetAction, type RequestResetFormState } from "@/server/actions/auth";
@@ -17,7 +18,7 @@ function SubmitButton() {
 }
 
 export default function ForgotPasswordPage() {
-  const [state, formAction] = useFormState(requestPasswordResetAction, initialState);
+  const [state, formAction] = useActionState(requestPasswordResetAction, initialState);
 
   return (
     <AuthShell

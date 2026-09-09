@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useTransition } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useRef, useTransition, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import {
   uploadAttachmentAction,
   deleteAttachmentAction,
@@ -32,7 +32,7 @@ export default function ExpenseAttachments({
   expenseId: string;
   attachments: { id: string; filename: string }[];
 }) {
-  const [state, formAction] = useFormState(uploadAttachmentAction, initialState);
+  const [state, formAction] = useActionState(uploadAttachmentAction, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   const [pendingDelete, startDelete] = useTransition();
 

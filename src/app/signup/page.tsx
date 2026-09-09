@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import Link from "next/link";
 import AuthShell from "@/components/marketing/AuthShell";
 import { signupAction, type SignupFormState } from "@/server/actions/auth";
@@ -17,7 +18,7 @@ function SubmitButton() {
 }
 
 export default function SignupPage() {
-  const [state, formAction] = useFormState(signupAction, initialState);
+  const [state, formAction] = useActionState(signupAction, initialState);
 
   return (
     <AuthShell

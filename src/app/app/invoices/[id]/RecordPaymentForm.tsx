@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { recordPaymentAction, type ActionState } from "@/server/actions/invoices";
 
 const initialState: ActionState = {};
@@ -25,7 +26,7 @@ export default function RecordPaymentForm({
   maxDollars: number;
   idempotencyKey: string;
 }) {
-  const [state, formAction] = useFormState(recordPaymentAction, initialState);
+  const [state, formAction] = useActionState(recordPaymentAction, initialState);
   const today = new Date().toISOString().slice(0, 10);
 
   return (

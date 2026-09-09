@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useFormState, useFormStatus } from "react-dom";
+import { useMemo, useState, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { createInvoiceAction, type ActionState } from "@/server/actions/invoices";
 
 const initialState: ActionState = {};
@@ -24,7 +24,7 @@ export default function NewInvoiceForm({
   businessId: string;
   customers: { id: string; name: string }[];
 }) {
-  const [state, formAction] = useFormState(createInvoiceAction, initialState);
+  const [state, formAction] = useActionState(createInvoiceAction, initialState);
   const [lines, setLines] = useState<Line[]>([{ description: "", quantity: 1, unitPriceDollars: 0 }]);
   const [taxDollars, setTaxDollars] = useState(0);
 

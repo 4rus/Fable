@@ -1,8 +1,8 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState, useEffect } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
 import Link from "next/link";
 import AuthShell from "@/components/marketing/AuthShell";
 import { resetPasswordAction, type ResetPasswordFormState } from "@/server/actions/auth";
@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token") ?? "";
-  const [state, formAction] = useFormState(resetPasswordAction, initialState);
+  const [state, formAction] = useActionState(resetPasswordAction, initialState);
 
   useEffect(() => {
     if (state.success) {

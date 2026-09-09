@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useActionState } from "react";
 import { useRouter } from "next/navigation";
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
 import { switchBusinessAction, createBusinessAction, type ActionState } from "@/server/actions/businesses";
 
 interface BusinessOption {
@@ -97,7 +97,7 @@ function SubmitButton() {
 }
 
 function CreateBusinessForm({ onDone }: { onDone: () => void }) {
-  const [state, formAction] = useFormState(createBusinessAction, initialState);
+  const [state, formAction] = useActionState(createBusinessAction, initialState);
 
   return (
     <form action={formAction} className="px-3 py-2">
