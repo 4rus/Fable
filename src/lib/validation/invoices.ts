@@ -2,6 +2,20 @@ import { z } from "zod";
 
 const cents = z.number().int().nonnegative().max(1_000_000_000); // $10M ceiling, sanity bound
 
+/**
+ * `FormData.get("field")` returns `null` — not `undefined` — when a field
+ * is absent from the submitted form. Zod's `.optional()` only treats
+ * `undefined` as "not provided" and rejects `null` with a confusing
+ * "Expected string, received null" error. Every optional text field parsed
+ * straight from a FormData object needs this, not `.optional()` alone.
+ */
+function optionalText(maxLength: number) {
+  return z.preprocess(
+    (v) => (v === null || v === "" ? undefined : v),
+    z.string().trim().max(maxLength).optional(),
+  );
+}
+
 export const lineItemInput = z.object({
   description: z.string().trim().min(1).max(500),
   quantity: z.number().int().positive().max(1_000_000),
@@ -14,7 +28,7 @@ export const createInvoiceSchema = z.object({
   issueDate: z.coerce.date(),
   dueDate: z.coerce.date(),
   taxCents: cents.default(0),
-  notes: z.string().trim().max(2000).optional(),
+  notes: optionalText(2000),
   lineItems: z.array(lineItemInput).min(1).max(200),
 });
 
@@ -24,16 +38,19 @@ export const recordPaymentSchema = z.object({
   amountCents: cents.positive(),
   method: z.enum(["cash", "check", "card", "bank_transfer", "other"]).default("other"),
   paidAt: z.coerce.date().default(() => new Date()),
-  note: z.string().trim().max(1000).optional(),
+  note: optionalText(1000),
   idempotencyKey: z.string().trim().min(1).max(200),
 });
 
 export const createCustomerSchema = z.object({
   businessId: z.string().min(1),
   name: z.string().trim().min(1).max(200),
-  email: z.string().trim().toLowerCase().email().optional().or(z.literal("")),
-  phone: z.string().trim().max(50).optional(),
-  notes: z.string().trim().max(2000).optional(),
+  email: z.preprocess(
+    (v) => (v === null || v === "" ? undefined : v),
+    z.string().trim().toLowerCase().email().optional(),
+  ),
+  phone: optionalText(50),
+  notes: optionalText(2000),
 });
 
 export const createExpenseSchema = z.object({
@@ -42,6 +59,6 @@ export const createExpenseSchema = z.object({
   vendorName: z.string().trim().min(1).max(200),
   amountCents: cents.positive(),
   incurredAt: z.coerce.date(),
-  description: z.string().trim().max(2000).optional(),
+  description: optionalText(2000),
   isRecurring: z.boolean().default(false),
 });

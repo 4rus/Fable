@@ -132,11 +132,12 @@ async function main() {
   // Invoice 2: paid, but late (builds a mixed history for Union Coffee)
   await createPaidInvoice(business.id, coffee!.id, 95_000, 40, 20);
 
-  // Invoice 3: overdue and unpaid — the headline "holy shit" moment
-  await createOpenInvoice(business.id, dental!.id, 184_000, 17, "SENT");
+  // Invoice 3: overdue and unpaid — the headline "holy shit" moment (this is
+  // literally the Product Thesis's own example: a ~$1,840 invoice, 17 days late)
+  await createOpenInvoice(business.id, dental!.id, 184_000, -17, "SENT");
 
   // Invoice 4: partially paid, also overdue
-  const partial = await createOpenInvoice(business.id, law!.id, 320_000, 9, "SENT");
+  const partial = await createOpenInvoice(business.id, law!.id, 320_000, -9, "SENT");
   await prisma.payment.create({
     data: {
       businessId: business.id,
@@ -150,7 +151,7 @@ async function main() {
   await prisma.invoice.update({ where: { id: partial.id }, data: { status: "PARTIALLY_PAID" } });
 
   // Invoice 5: sent recently, not yet due — no anxiety here, just realism
-  await createOpenInvoice(business.id, daycare!.id, 128_000, -10, "SENT");
+  await createOpenInvoice(business.id, daycare!.id, 128_000, 10, "SENT");
 
   console.log("Seeded demo business:", business.name);
   console.log("Login: demo@example.com / demo-password-123");

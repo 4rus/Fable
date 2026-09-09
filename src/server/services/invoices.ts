@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { addCents, multiplyCentsByQuantity } from "@/lib/money";
+import { addCents, multiplyCentsByQuantity, formatCents } from "@/lib/money";
 import type { Prisma } from "@prisma/client";
 import { ForbiddenError } from "@/server/tenant";
 
@@ -23,7 +23,7 @@ import { ForbiddenError } from "@/server/tenant";
 export class OverpaymentError extends Error {
   constructor(amountCents: number, remainingCents: number) {
     super(
-      `Payment of ${amountCents} cents exceeds the ${remainingCents} cents remaining on this invoice.`,
+      `That payment of ${formatCents(amountCents)} is more than the ${formatCents(remainingCents)} remaining on this invoice.`,
     );
     this.name = "OverpaymentError";
   }

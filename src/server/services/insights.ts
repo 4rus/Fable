@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import { addCents } from "@/lib/money";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
+import { computeForecast } from "@/server/services/forecast";
 
 /**
  * INSIGHT ENGINE — this is the core differentiator, and it is 100%
@@ -139,8 +140,37 @@ export async function getCashTrendInsight(businessId: string): Promise<Insight |
   };
 }
 
+/**
+ * The headline "can I afford to keep going" warning. Reuses the same
+ * deterministic forecast engine the /app/forecast page shows — this is not
+ * a separate guess, it's the exact same number surfaced proactively so the
+ * owner doesn't have to go looking for it. A RECOMMENDATION (not a FACT):
+ * it's built on the forecast's own stated assumptions, which are carried
+ * through in `detail` rather than hidden.
+ */
+export async function getRunwayWarningInsight(businessId: string): Promise<Insight | null> {
+  const forecast90 = await computeForecast(businessId, 90);
+  if (forecast90.projectedCashCents >= 0) return null;
+
+  // Find the earliest horizon (30/60/90) that's already projected negative,
+  // so the headline is as specific as the data supports.
+  const forecast30 = await computeForecast(businessId, 30);
+  const forecast60 = await computeForecast(businessId, 60);
+  const first = [forecast30, forecast60, forecast90].find((f) => f.projectedCashCents < 0)!;
+
+  return {
+    id: "runway-warning",
+    kind: "RECOMMENDATION",
+    severity: "critical",
+    title: `At this pace, you're projected to run out of cash within ${first.horizonDays} days`,
+    detail: `Projected cash on ${new Date(first.targetDate).toLocaleDateString()}: ${formatUsd(first.projectedCashCents)}. This assumes your recurring expenses stay the same and you collect from open invoices at each customer's usual pace. Consider following up on overdue invoices or slowing down non-essential spending.${first.assumptions.length > 0 ? " " + first.assumptions.join(" ") : ""}`,
+    evidence: [],
+  };
+}
+
 export async function getAllInsights(businessId: string): Promise<Insight[]> {
   const results = await Promise.all([
+    getRunwayWarningInsight(businessId),
     getOverdueInvoicesInsight(businessId),
     getExpenseTrendInsight(businessId),
     getCashTrendInsight(businessId),
