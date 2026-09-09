@@ -81,8 +81,9 @@ src/
                            or requireOwner() — see below.
     actions/*.ts           "use server" mutations, called from forms/buttons.
     services/*.ts          Domain logic: invoices, payments, forecast,
-                           insights, team management. This is where the
-                           actual business rules live, independent of HTTP.
+                           insights, team management, attachments, CSV
+                           import. This is where the actual business
+                           rules live, independent of HTTP.
   lib/
     money.ts               The ONLY module that does money math. Integer
                            cents everywhere; never a float.
@@ -103,7 +104,11 @@ tests/
                             (tests/test.db), never your dev database.
 e2e/
   *.spec.ts                Playwright: full-stack critical user journeys
-                            against a real running server + real database.
+                            (signup through payment, plus attachment
+                            upload/download and CSV import) against a
+                            real running server + real database.
+uploads/                   Local dev storage for attachment files (see
+                           "Deployment" — not production-viable as-is).
 ```
 
 ## Security model
@@ -147,6 +152,14 @@ password reset, 2FA, and account/business deletion. These are real gaps
 for a production launch, not oversights — each needs deliberate design
 (especially deletion, which has to reconcile "let a user leave" against
 "don't destroy financial records that may need retention").
+
+**CSV import** (`src/server/services/csvImport.ts`) only ever creates
+expenses (money out). A positive amount in a bank export is a deposit —
+we have no reliable way to know which invoice or customer it belongs to,
+and guessing would mean fabricating a link between a real transaction
+and a specific customer. Deposit rows are parsed, counted, and surfaced
+to the user to match by hand on the Invoices page; they are never
+silently dropped and never auto-converted into a Payment.
 
 ## Accounting model
 
