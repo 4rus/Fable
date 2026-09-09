@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { createCustomerAction, type ActionState } from "@/server/actions/customers";
 
 const initialState: ActionState = {};
@@ -15,7 +16,7 @@ function SubmitButton() {
 }
 
 export default function NewCustomerForm({ businessId }: { businessId: string }) {
-  const [state, formAction] = useFormState(createCustomerAction, initialState);
+  const [state, formAction] = useActionState(createCustomerAction, initialState);
 
   return (
     <form action={formAction} className="field-surface flex flex-wrap items-end gap-3 p-5">

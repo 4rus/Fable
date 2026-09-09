@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useFormStatus } from "react-dom";
+import { useActionState } from "react";
 import { addMemberAction, type ActionState } from "@/server/actions/team";
 
 const initialState: ActionState = {};
@@ -15,7 +16,7 @@ function SubmitButton() {
 }
 
 export default function AddMemberForm({ businessId }: { businessId: string }) {
-  const [state, formAction] = useFormState(addMemberAction, initialState);
+  const [state, formAction] = useActionState(addMemberAction, initialState);
 
   return (
     <form action={formAction} className="field-surface space-y-3 p-5">
