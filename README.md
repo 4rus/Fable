@@ -73,8 +73,21 @@ src/
   app/                     Routes (App Router). Pages are server components
                            that call server/services/* directly — no fetch
                            round-trip to your own API for reads.
+  app/page.tsx             The public marketing homepage (logged-out
+                           visitors; redirects to /app if already signed
+                           in). Shares the same design tokens as the app —
+                           see components/marketing/.
+  app/login, app/signup,
+  app/forgot-password,
+  app/reset-password       Authentication screens, all built on the
+                           shared components/marketing/AuthShell split
+                           layout rather than a bare centered card.
   app/*/[...]              Client components only where interactivity is
                            needed (forms, the sidebar, insight disclosures).
+  components/marketing/    Public-site-only UI: nav, footer, the auth
+                           shell, and the homepage's product preview
+                           (a static illustration styled identically to
+                           the real Overview page — not a generic mockup).
   server/
     tenant.ts              THE authorization chokepoint. Every business-
                            scoped read/write goes through requireMembership()
@@ -147,11 +160,21 @@ an authorization-checked route — never a public/guessable URL. See
 
 **What is NOT implemented yet, on purpose:** email-based invitations
 (adding a team member currently requires them to already have an
-account — see the comment in `src/server/services/businesses.ts`),
-password reset, 2FA, and account/business deletion. These are real gaps
-for a production launch, not oversights — each needs deliberate design
-(especially deletion, which has to reconcile "let a user leave" against
-"don't destroy financial records that may need retention").
+account — see the comment in `src/server/services/businesses.ts`), 2FA,
+and account/business deletion. These are real gaps for a production
+launch, not oversights — each needs deliberate design (especially
+deletion, which has to reconcile "let a user leave" against "don't
+destroy financial records that may need retention").
+
+**Password reset** (`src/server/services/password-reset.ts`) is real,
+not mocked: a single-use, 30-minute, SHA-256-hashed token is created and
+validated server-side, and a successful reset invalidates every other
+outstanding token for that user. What's still a placeholder is
+*delivery* — no email provider is configured in this environment, so
+`/forgot-password` prints the reset link directly on the page (clearly
+labeled "Development mode") instead of emailing it. Wiring in a real
+mail provider (Resend, Postmark, SES) only changes how the link is
+delivered, not the token logic itself.
 
 **CSV import** (`src/server/services/csvImport.ts`) only ever creates
 expenses (money out). A positive amount in a bank export is a deposit —

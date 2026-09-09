@@ -42,10 +42,36 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships Membership[]
-  auditLogs   AuditLog[]
+  memberships         Membership[]
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@map("users")
+}
+
+/// Password reset. We store a SHA-256 hash of the token, never the token
+/// itself — identical reasoning to why we hash passwords: a DB read alone
+/// should never be enough to take over an account. A token is single-use
+/// (`usedAt`) and short-lived (`expiresAt`); requesting a new one does not
+/// invalidate outstanding ones by row, but resetPassword() invalidates all
+/// of the user's outstanding tokens once any one of them succeeds.
+///
+/// NOTE: no email provider is configured in this environment (see README).
+/// The request flow below is real — it creates and validates a genuine,
+/// single-use, expiring token — but until an email provider is wired in,
+/// the reset link is surfaced directly in the response rather than mailed.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 /// NOTE ON ENUMS: SQLite (our local-dev provider) has no native enum type,
