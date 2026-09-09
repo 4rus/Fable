@@ -17,7 +17,7 @@ export async function getMyBusinesses(userId: string) {
 //
 // Scope decision (documented, not silent): there is no email/invitation-
 // token infrastructure in v1. "Adding a member" only works if that person
-// already has a Financial OS account — we look their email up and attach
+// already has a Fable account — we look their email up and attach
 // a membership directly. If they don't have an account yet, we say so
 // rather than pretending an email invite went out. A real invite-by-email
 // flow (token, expiry, signup-on-accept) is a deliberate P1, not something
@@ -32,7 +32,7 @@ export class LastOwnerError extends Error {
 
 export class MemberNotFoundError extends Error {
   constructor(email: string) {
-    super(`No Financial OS account exists for ${email} yet — they need to sign up first.`);
+    super(`No Fable account exists for ${email} yet — they need to sign up first.`);
     this.name = "MemberNotFoundError";
   }
 }

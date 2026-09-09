@@ -38,7 +38,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex items-center gap-2">
           <LogoMark className="text-ink" />
-          <span className="text-[15px] font-semibold tracking-tight text-ink">Financial OS</span>
+          <span className="text-[15px] font-semibold tracking-tight text-ink">Fable</span>
         </div>
 
         <div className="field-surface p-7">

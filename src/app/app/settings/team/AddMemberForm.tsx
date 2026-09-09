@@ -35,7 +35,7 @@ export default function AddMemberForm({ businessId }: { businessId: string }) {
         <SubmitButton />
       </div>
       <p className="text-xs text-muted">
-        They need a Financial OS account already — this attaches them to your workspace, it
+        They need a Fable account already — this attaches them to your workspace, it
         doesn&apos;t send an email invite yet.
       </p>
       {state.error && <p className="text-sm text-bad">{state.error}</p>}

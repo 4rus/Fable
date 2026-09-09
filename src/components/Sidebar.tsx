@@ -37,7 +37,7 @@ export default function Sidebar({
       <div className="flex items-center justify-between border-b border-line bg-surface px-4 py-3 md:hidden">
         <div className="flex items-center gap-2">
           <LogoMark className="text-ink" />
-          <span className="text-[14px] font-semibold tracking-tight text-ink">Financial OS</span>
+          <span className="text-[14px] font-semibold tracking-tight text-ink">Fable</span>
         </div>
         <button
           onClick={() => setMobileOpen(true)}
@@ -90,7 +90,7 @@ function SidebarContent({
     <div className="flex h-full flex-col border-r border-line bg-surface">
       <div className="flex items-center gap-2 px-4 pb-4 pt-5">
         <LogoMark className="text-ink" />
-        <span className="text-[14px] font-semibold tracking-tight text-ink">Financial OS</span>
+        <span className="text-[14px] font-semibold tracking-tight text-ink">Fable</span>
       </div>
 
       <div className="relative px-3 pb-4">

@@ -16,7 +16,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Financial OS",
+  title: "Fable",
   description: "Know where your business actually stands.",
 };
 
