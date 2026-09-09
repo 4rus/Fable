@@ -3,6 +3,11 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { loginSchema } from "@/lib/validation/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { logWarn } from "@/lib/logger";
+
+const LOGIN_LIMIT = 10; // attempts
+const LOGIN_WINDOW_MS = 10 * 60 * 1000; // per 10 minutes
 
 /**
  * AUTHENTICATION (answers "who are you?"), not authorization.
@@ -27,12 +32,27 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(raw) {
+      async authorize(raw, req) {
         // Never trust client input, even for auth fields. Validate shape
         // before touching the database.
         const parsed = loginSchema.safeParse(raw);
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
+
+        // Brute-force protection. Keyed on IP+email together (not just
+        // email) so an attacker can't lock a real user out by hammering
+        // their address from many IPs into one shared bucket, and a
+        // shared/corporate IP with many legitimate users isn't starved by
+        // one person's typos. On limit exceeded we fall through to the
+        // SAME generic failure as a wrong password — revealing "you're
+        // rate-limited" vs "that password is wrong" would itself be an
+        // oracle an attacker could use to enumerate valid emails.
+        const ip = getClientIp(new Headers(req.headers as HeadersInit));
+        const rate = checkRateLimit(`login:${ip}:${email.toLowerCase()}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+        if (!rate.allowed) {
+          logWarn("login rate limit exceeded", { ip, email: email.toLowerCase() });
+          return null;
+        }
 
         const user = await prisma.user.findUnique({
           where: { email: email.toLowerCase() },

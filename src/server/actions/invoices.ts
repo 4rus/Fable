@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { logError } from "@/lib/logger";
 import { requireMembership } from "@/server/tenant";
 import { createInvoiceSchema, recordPaymentSchema } from "@/lib/validation/invoices";
 import {
@@ -47,7 +48,7 @@ export async function createInvoiceAction(
     invoiceId = invoice.id;
   } catch (err) {
     if (err instanceof ForbiddenError) return { error: err.message };
-    console.error("createInvoice failed", err);
+    logError("createInvoice failed", err);
     return { error: "Could not create the invoice. Please try again." };
   }
 
@@ -92,7 +93,7 @@ export async function recordPaymentAction(
       return { error: err.message };
     }
     if (err instanceof ForbiddenError) return { error: err.message };
-    console.error("recordPayment failed", err);
+    logError("recordPayment failed", err);
     return { error: "Could not record the payment. Please try again." };
   }
 

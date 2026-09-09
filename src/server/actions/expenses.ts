@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { logError } from "@/lib/logger";
 import { requireMembership, ForbiddenError } from "@/server/tenant";
 import { createExpenseSchema } from "@/lib/validation/invoices";
 
@@ -47,7 +48,7 @@ export async function createExpenseAction(
     });
   } catch (err) {
     if (err instanceof ForbiddenError) return { error: err.message };
-    console.error("createExpense failed", err);
+    logError("createExpense failed", err);
     return { error: "Could not save the expense. Please try again." };
   }
 

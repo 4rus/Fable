@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { logError } from "@/lib/logger";
 import { requireOwner, ForbiddenError } from "@/server/tenant";
 import {
   addMemberByEmail,
@@ -40,7 +41,7 @@ export async function addMemberAction(
       return { error: err.message };
     }
     if (err instanceof ForbiddenError) return { error: err.message };
-    console.error("addMember failed", err);
+    logError("addMember failed", err);
     return { error: "Could not add that person. Please try again." };
   }
 
@@ -57,7 +58,7 @@ export async function revokeMemberAction(
     await revokeMember({ businessId, membershipId, revokedByUserId: userId });
   } catch (err) {
     if (err instanceof LastOwnerError) return { error: err.message };
-    console.error("revokeMember failed", err);
+    logError("revokeMember failed", err);
     return { error: "Could not remove that person. Please try again." };
   }
   revalidatePath("/app/settings/team");

@@ -9,7 +9,8 @@ import StatusChip from "@/components/StatusChip";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SendInvoiceButton from "./SendInvoiceButton";
 
-export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const { userId } = await requireUser();
   const businesses = await getMyBusinesses(userId);
   const business = businesses[0]!;
@@ -20,7 +21,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   // never pull a record from a different tenant.
   await requireMembership(business.id);
   const invoice = await prisma.invoice.findFirst({
-    where: { id: params.id, businessId: business.id, deletedAt: null },
+    where: { id, businessId: business.id, deletedAt: null },
     include: {
       customer: true,
       lineItems: true,
