@@ -2,14 +2,15 @@ import { requireUser } from "@/server/tenant";
 import { getMyBusinesses } from "@/server/services/businesses";
 import { getCurrentCashCents, computeForecast } from "@/server/services/forecast";
 import { getAllInsights } from "@/server/services/insights";
-import { formatCents } from "@/lib/money";
-import InsightCard from "@/components/InsightCard";
+import { formatCentsCompact, formatCentsDelta } from "@/lib/money";
+import InsightList from "@/components/InsightList";
 
-const confidenceCopy: Record<string, string> = {
-  high: "High confidence",
-  medium: "Medium confidence",
-  low: "Low confidence — limited data",
-};
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
 
 export default async function DashboardPage() {
   const { userId } = await requireUser();
@@ -22,63 +23,64 @@ export default async function DashboardPage() {
     getAllInsights(business.id),
   ]);
 
+  const netChangeCents = forecast.projectedCashCents - cashCents;
+  const hasCriticalInsight = insights.some((i) => i.severity === "critical");
+
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Overview</h1>
-        <p className="mt-1 text-sm text-muted">Where things stand today.</p>
+        <h1 className="text-[22px] font-semibold tracking-tight text-ink">
+          {greeting()}, {business.name}
+        </h1>
+        <p className="mt-1 text-sm text-muted">Here&apos;s what matters about your business today.</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="card p-6">
-          <p className="kicker">Cash on hand</p>
-          <p className="mt-2 text-[34px] font-semibold leading-none tracking-tight text-ink tabular-nums">
-            {formatCents(cashCents)}
-          </p>
-          <p className="mt-2 text-xs text-muted">Right now, across your accounts on file.</p>
+      {/* Primary financial status — one dominant number, not a grid of
+          equally-weighted cards. Everything else is supporting context. */}
+      <section>
+        <p className="text-sm text-muted">Cash available</p>
+        <div className="mt-1 flex items-baseline gap-3">
+          <span className="text-[44px] font-semibold leading-none tracking-tight text-ink tabular-nums">
+            {formatCentsCompact(cashCents)}
+          </span>
         </div>
+        <p className="mt-2 text-sm text-muted">
+          {hasCriticalInsight ? (
+            <span className="font-medium text-bad">Action needed — see below.</span>
+          ) : netChangeCents >= 0 ? (
+            <>Trending toward {formatCentsCompact(forecast.projectedCashCents)} over the next 30 days.</>
+          ) : (
+            <>Trending down to {formatCentsCompact(forecast.projectedCashCents)} over the next 30 days.</>
+          )}
+        </p>
 
-        <div className="card p-6">
-          <div className="flex items-baseline justify-between">
-            <p className="kicker">In 30 days, projected</p>
-            <span className="text-xs text-muted">{confidenceCopy[forecast.confidence]}</span>
+        <dl className="mt-6 grid grid-cols-3 gap-3 divide-x divide-line border-t border-line pt-5 sm:gap-0">
+          <div className="pr-2 sm:pr-4">
+            <dt className="text-xs text-muted">Expected in</dt>
+            <dd className="mt-1 whitespace-nowrap text-base font-medium tabular-nums text-ink sm:text-lg">
+              {formatCentsDelta(forecast.expectedReceivablesCents)}
+            </dd>
           </div>
-          <p className="mt-2 text-[34px] font-semibold leading-none tracking-tight text-ink tabular-nums">
-            {formatCents(forecast.projectedCashCents)}
-          </p>
-          <dl className="mt-4 flex gap-5 text-xs">
-            <div>
-              <dt className="text-muted">Collections</dt>
-              <dd className="font-medium tabular-nums text-good">
-                +{formatCents(forecast.expectedReceivablesCents)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted">Expenses</dt>
-              <dd className="font-medium tabular-nums text-bad">
-                −{formatCents(forecast.expectedExpensesCents)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
+          <div className="px-2 sm:px-4">
+            <dt className="text-xs text-muted">Expected out</dt>
+            <dd className="mt-1 whitespace-nowrap text-base font-medium tabular-nums text-ink sm:text-lg">
+              {formatCentsDelta(-forecast.expectedExpensesCents)}
+            </dd>
+          </div>
+          <div className="pl-2 sm:pl-4">
+            <dt className="text-xs text-muted">Net</dt>
+            <dd
+              className={`mt-1 whitespace-nowrap text-base font-medium tabular-nums sm:text-lg ${netChangeCents >= 0 ? "text-good" : "text-bad"}`}
+            >
+              {formatCentsDelta(netChangeCents)}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-ink">What&apos;s worth knowing</h2>
-        {insights.length === 0 ? (
-          <div className="card p-8 text-center">
-            <p className="text-sm text-muted">
-              Nothing urgent right now. Add a few invoices and expenses and we&apos;ll start
-              surfacing what matters here.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2.5">
-            {insights.map((insight) => (
-              <InsightCard key={insight.id} insight={insight} />
-            ))}
-          </div>
-        )}
+        <h2 className="mb-3 text-[13px] font-semibold text-ink">Worth knowing</h2>
+        <InsightList insights={insights} />
       </section>
     </div>
   );

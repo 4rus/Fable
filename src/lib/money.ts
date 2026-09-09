@@ -26,14 +26,42 @@ export function centsToDollars(cents: number): number {
   return cents / 100;
 }
 
-/** Formats cents as a localized currency string. Display-only — never parse
- * this back into a number for calculation. */
+/** Formats cents as a localized currency string, always with two decimal
+ * places. Use this for anything precision-sensitive: invoice line items,
+ * payment records, ledgers — anywhere a partial cent could matter or a
+ * user is reconciling against a bank statement. Display-only — never
+ * parse this back into a number for calculation. */
 export function formatCents(cents: number, currency = "USD"): string {
   assertInteger(cents);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
   }).format(cents / 100);
+}
+
+/** Formats cents as currency WITHOUT decimals when the amount is a whole
+ * dollar figure (the common case for headline metrics like "cash on
+ * hand"), falling back to full precision when there's a meaningful cents
+ * component. Use this for large, glanceable numbers — never for anything
+ * a user might reconcile against a statement. */
+export function formatCentsCompact(cents: number, currency = "USD"): string {
+  assertInteger(cents);
+  const dollars = cents / 100;
+  const hasFractionalCents = Math.round(dollars * 100) % 100 !== 0;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: hasFractionalCents ? 2 : 0,
+    maximumFractionDigits: hasFractionalCents ? 2 : 0,
+  }).format(dollars);
+}
+
+/** Formats a signed cents delta as "+$1,240" / "−$820" (real minus sign,
+ * not a hyphen) for change indicators. */
+export function formatCentsDelta(cents: number, currency = "USD"): string {
+  assertInteger(cents);
+  const sign = cents > 0 ? "+" : cents < 0 ? "−" : "";
+  return `${sign}${formatCentsCompact(Math.abs(cents), currency)}`;
 }
 
 export function addCents(...values: number[]): number {

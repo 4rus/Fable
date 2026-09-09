@@ -41,8 +41,4 @@ body {
   .card {
     @apply rounded-xl border border-line bg-surface shadow-card;
   }
-
-  .kicker {
-    @apply text-[11px] font-semibold uppercase tracking-wider text-muted;
-  }
 }

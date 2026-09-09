@@ -22,19 +22,26 @@ export default async function CustomersPage() {
 
       <NewCustomerForm businessId={business.id} />
 
-      <div className="card divide-y divide-line">
-        {customers.length === 0 && (
-          <p className="p-8 text-center text-sm text-muted">No customers yet.</p>
-        )}
-        {customers.map((c) => (
-          <div key={c.id} className="flex items-center justify-between px-5 py-3.5">
-            <div>
-              <p className="text-sm font-medium text-ink">{c.name}</p>
-              {c.email && <p className="text-xs text-muted">{c.email}</p>}
+      {customers.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line py-10 text-center">
+          <p className="text-sm text-ink">No customers yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+            Add the people and businesses you invoice — you&apos;ll need at least one before
+            creating an invoice.
+          </p>
+        </div>
+      ) : (
+        <div className="card divide-y divide-line">
+          {customers.map((c) => (
+            <div key={c.id} className="flex items-center justify-between px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium text-ink">{c.name}</p>
+                {c.email && <p className="text-xs text-muted">{c.email}</p>}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

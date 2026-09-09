@@ -1,74 +1,123 @@
 import { requireUser } from "@/server/tenant";
 import { getMyBusinesses } from "@/server/services/businesses";
-import { computeForecast } from "@/server/services/forecast";
-import { formatCents } from "@/lib/money";
-
-const confidenceCopy: Record<string, string> = {
-  high: "High confidence",
-  medium: "Medium confidence",
-  low: "Low confidence",
-};
+import { computeForecast, getCurrentCashCents, getUpcomingReceivables } from "@/server/services/forecast";
+import { formatCentsCompact, formatCentsDelta } from "@/lib/money";
 
 export default async function ForecastPage() {
   const { userId } = await requireUser();
   const businesses = await getMyBusinesses(userId);
   const business = businesses[0]!;
 
-  const [f30, f60, f90] = await Promise.all([
+  const [currentCash, f30, f60, f90, upcoming] = await Promise.all([
+    getCurrentCashCents(business.id),
     computeForecast(business.id, 30),
     computeForecast(business.id, 60),
     computeForecast(business.id, 90),
+    getUpcomingReceivables(business.id, 90),
   ]);
 
+  const nodes = [
+    { label: "Today", date: null as string | null, cents: currentCash },
+    { label: "30 days", date: f30.targetDate, cents: f30.projectedCashCents },
+    { label: "60 days", date: f60.targetDate, cents: f60.projectedCashCents },
+    { label: "90 days", date: f90.targetDate, cents: f90.projectedCashCents },
+  ];
+
+  const dipsNegative = nodes.some((n) => n.cents < 0);
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight text-ink">Cash forecast</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Forecast</h1>
         <p className="mt-1 text-sm text-muted">
-          A conservative projection based on your open invoices and recurring expenses — not a
-          guarantee.
+          {dipsNegative
+            ? "Your projected cash dips below zero within 90 days — see when, below."
+            : "Your projected cash stays positive over the next 90 days."}
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[f30, f60, f90].map((f) => (
-          <div key={f.horizonDays} className="card p-6">
-            <p className="kicker">In {f.horizonDays} days</p>
-            <p
-              className={`mt-2 text-[26px] font-semibold leading-none tracking-tight tabular-nums ${f.projectedCashCents < 0 ? "text-bad" : "text-ink"}`}
-            >
-              {formatCents(f.projectedCashCents)}
-            </p>
-            <p className="mt-2 text-xs text-muted">
-              {new Date(f.targetDate).toLocaleDateString()} · {confidenceCopy[f.confidence]}
-            </p>
-            <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-xs">
-              <div className="flex justify-between">
-                <dt className="text-muted">Starting cash</dt>
-                <dd className="tabular-nums text-ink">{formatCents(f.currentCashCents)}</dd>
+      {/* Timeline — the forecast's real hierarchy is time, not four equal
+          cards. Each node connects to the next so the trajectory reads at
+          a glance. */}
+      <section className="overflow-x-auto">
+        <div className="flex min-w-[560px] items-start">
+          {nodes.map((node, i) => (
+            <div key={node.label} className="flex flex-1 items-start last:flex-none">
+              <div className="flex flex-col items-start">
+                <p className="text-xs text-muted">{node.label}</p>
+                <p
+                  className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${node.cents < 0 ? "text-bad" : "text-ink"}`}
+                >
+                  {formatCentsCompact(node.cents)}
+                </p>
+                {node.date && (
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {new Date(node.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                  </p>
+                )}
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Collections</dt>
-                <dd className="tabular-nums text-good">+{formatCents(f.expectedReceivablesCents)}</dd>
+              {i < nodes.length - 1 && (
+                <div className="mt-4 flex flex-1 items-center px-3">
+                  <div className="h-px w-full bg-line" />
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="shrink-0 text-line">
+                    <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Drivers — inline stats, not another row of cards. */}
+      <section className="grid grid-cols-2 gap-6 border-y border-line py-5 sm:grid-cols-2">
+        <div>
+          <p className="text-xs text-muted">Money coming in (90d)</p>
+          <p className="mt-1 text-lg font-medium tabular-nums text-good">
+            {formatCentsDelta(f90.expectedReceivablesCents)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted">Money going out (90d)</p>
+          <p className="mt-1 text-lg font-medium tabular-nums text-bad">
+            {formatCentsDelta(-f90.expectedExpensesCents)}
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-[13px] font-semibold text-ink">Expected invoice payments</h2>
+        {upcoming.length === 0 ? (
+          <p className="text-sm text-muted">No open invoices due within the next 90 days.</p>
+        ) : (
+          <div className="divide-y divide-line rounded-xl border border-line">
+            {upcoming.map((e, i) => (
+              <div key={i} className="flex items-center justify-between px-5 py-3">
+                <div>
+                  <p className="text-sm text-ink">{e.label}</p>
+                  <p className="text-xs text-muted">
+                    {new Date(e.date).toLocaleDateString()}
+                    {e.overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
+                  </p>
+                </div>
+                <span className="text-sm font-medium tabular-nums text-good">
+                  +{formatCentsCompact(e.amountCents)}
+                </span>
               </div>
-              <div className="flex justify-between">
-                <dt className="text-muted">Expenses</dt>
-                <dd className="tabular-nums text-bad">−{formatCents(f.expectedExpensesCents)}</dd>
-              </div>
-            </dl>
+            ))}
           </div>
-        ))}
-      </div>
+        )}
+      </section>
 
       {f90.assumptions.length > 0 && (
-        <div className="card p-5">
-          <p className="mb-2 text-sm font-medium text-ink">What this assumes</p>
+        <section>
+          <h2 className="mb-2 text-[13px] font-semibold text-ink">What this assumes</h2>
           <ul className="space-y-1 text-sm text-muted">
             {f90.assumptions.map((a, i) => (
               <li key={i}>· {a}</li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
     </div>
   );

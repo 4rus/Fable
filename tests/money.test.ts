@@ -3,6 +3,8 @@ import {
   dollarsToCents,
   centsToDollars,
   formatCents,
+  formatCentsCompact,
+  formatCentsDelta,
   addCents,
   subtractCents,
   multiplyCentsByQuantity,
@@ -56,5 +58,18 @@ describe("money", () => {
     expect(formatCents(0)).toBe("$0.00");
     expect(formatCents(150000)).toBe("$1,500.00");
     expect(formatCents(-500)).toBe("-$5.00");
+  });
+
+  it("formatCentsCompact drops decimals for whole dollars, keeps them otherwise", () => {
+    expect(formatCentsCompact(734700)).toBe("$7,347");
+    expect(formatCentsCompact(0)).toBe("$0");
+    expect(formatCentsCompact(734750)).toBe("$7,347.50");
+    expect(formatCentsCompact(-500)).toBe("-$5");
+  });
+
+  it("formatCentsDelta signs the amount with a real minus sign", () => {
+    expect(formatCentsDelta(124000)).toBe("+$1,240");
+    expect(formatCentsDelta(-82000)).toBe("−$820");
+    expect(formatCentsDelta(0)).toBe("$0");
   });
 });

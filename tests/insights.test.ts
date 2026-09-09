@@ -41,7 +41,7 @@ describe("getRunwayWarningInsight", () => {
     expect(insight).not.toBeNull();
     expect(insight!.severity).toBe("critical");
     expect(insight!.kind).toBe("RECOMMENDATION");
-    expect(insight!.title).toMatch(/run out of cash/);
+    expect(insight!.headline).toMatch(/run short on cash/);
   });
 });
 

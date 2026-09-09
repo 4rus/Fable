@@ -29,10 +29,19 @@ export default async function InvoicesPage() {
         </Link>
       </div>
 
+      {invoices.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line py-12 text-center">
+          <p className="text-sm text-ink">No invoices yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+            Create your first invoice to start tracking what customers owe you — we&apos;ll
+            handle the totals and flag anything overdue automatically.
+          </p>
+          <Link href="/app/invoices/new" className="btn-primary mt-4 inline-flex">
+            New invoice
+          </Link>
+        </div>
+      ) : (
       <div className="card divide-y divide-line">
-        {invoices.length === 0 && (
-          <p className="p-8 text-center text-sm text-muted">No invoices yet.</p>
-        )}
         {invoices.map((inv) => {
           const overdue = isOverdue(inv);
           return (
@@ -60,6 +69,7 @@ export default async function InvoicesPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

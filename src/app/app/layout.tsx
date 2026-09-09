@@ -20,10 +20,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const business = businesses[0]!; // v1: single business per user; switcher is P1
 
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-screen md:flex">
       <Sidebar businessName={business.name} userEmail={ctx.userEmail} />
-      <main className="flex-1 px-8 py-10 md:px-12">
-        <div className="mx-auto max-w-4xl">{children}</div>
+      <main className="min-w-0 flex-1 px-5 py-8 md:px-12 md:py-10">
+        <div className="mx-auto max-w-3xl">{children}</div>
       </main>
     </div>
   );

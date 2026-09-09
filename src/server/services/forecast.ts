@@ -176,3 +176,51 @@ export async function customerOnTimeRate(
 
   return onTime / paidInvoices.length;
 }
+
+export interface UpcomingCashEvent {
+  date: string;
+  label: string;
+  amountCents: number;
+  direction: "in" | "out";
+  overdue: boolean;
+}
+
+/**
+ * Real, dated events within the horizon — open invoice due dates. We
+ * deliberately do NOT synthesize future recurring-expense dates here: we
+ * know the historical amount and cadence, not the actual future billing
+ * date, and inventing one would violate the "never invent financial
+ * information" rule. Recurring costs are represented in the forecast
+ * total (computeForecast) but not as fabricated calendar events.
+ */
+export async function getUpcomingReceivables(
+  businessId: string,
+  horizonDays: number,
+): Promise<UpcomingCashEvent[]> {
+  const now = new Date();
+  const horizonEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+
+  const openInvoices = await prisma.invoice.findMany({
+    where: {
+      businessId,
+      status: { in: ["SENT", "PARTIALLY_PAID"] },
+      deletedAt: null,
+      dueDate: { lte: horizonEnd },
+    },
+    include: { payments: { where: { voidedAt: null } }, customer: true },
+    orderBy: { dueDate: "asc" },
+  });
+
+  return openInvoices
+    .map((inv) => {
+      const remaining = subtractCents(inv.totalCents, amountPaidCents(inv));
+      return {
+        date: inv.dueDate.toISOString(),
+        label: `${inv.customer.name} — ${inv.number}`,
+        amountCents: remaining,
+        direction: "in" as const,
+        overdue: inv.dueDate < now,
+      };
+    })
+    .filter((e) => e.amountCents > 0);
+}

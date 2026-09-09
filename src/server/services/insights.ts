@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import { addCents } from "@/lib/money";
+import { addCents, formatCentsCompact } from "@/lib/money";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { computeForecast } from "@/server/services/forecast";
 
@@ -12,17 +12,30 @@ import { computeForecast } from "@/server/services/forecast";
  * claim. If we later add an LLM layer, its only job is turning this
  * structured object into friendlier prose — it must not be allowed to
  * invent numbers or conclusions of its own. See docs/ai-grounding.md.
+ *
+ * Each insight is structured as four distinct pieces (headline / why it
+ * matters / grounding basis / action) rather than a flat title+paragraph,
+ * so the UI can present it as a piece of analysis rather than a generic
+ * alert card.
  */
 
 export type InsightKind = "FACT" | "CALCULATION" | "RECOMMENDATION";
-export type InsightSeverity = "info" | "warning" | "critical";
+export type InsightSeverity = "critical" | "attention" | "info";
 
 export interface Insight {
   id: string;
   kind: InsightKind;
   severity: InsightSeverity;
-  title: string;
-  detail: string;
+  /** The headline claim, e.g. "$3,040 is waiting on overdue invoices". */
+  headline: string;
+  /** One or two sentences of concrete explanation grounding the headline. */
+  explanation: string;
+  /** Why this is worth the owner's attention — the "so what". */
+  why: string;
+  /** A short basis statement for trust, e.g. "Based on 2 open invoices". */
+  basis: string;
+  /** Optional call to action. */
+  action?: { label: string; href: string };
   evidence: { type: string; id: string; label: string }[];
 }
 
@@ -42,9 +55,12 @@ export async function getOverdueInvoicesInsight(businessId: string): Promise<Ins
   return {
     id: "overdue-invoices",
     kind: "FACT",
-    severity: overdue.length >= 3 || totalOverdueCents > 500_000 ? "critical" : "warning",
-    title: `${formatUsd(totalOverdueCents)} is overdue from ${overdue.length} customer${overdue.length === 1 ? "" : "s"}`,
-    detail: `The oldest is a ${formatUsd(balanceDueCents(oldest))} invoice from ${oldest.customer.name}, ${daysLate} day${daysLate === 1 ? "" : "s"} late. Following up on the oldest overdue invoices tends to move fastest.`,
+    severity: overdue.length >= 3 || totalOverdueCents > 500_000 ? "critical" : "attention",
+    headline: `${formatUsd(totalOverdueCents)} is waiting on overdue invoices`,
+    explanation: `${overdue.length} customer${overdue.length === 1 ? "" : "s"} ${overdue.length === 1 ? "is" : "are"} overdue. ${oldest.customer.name}'s ${formatUsd(balanceDueCents(oldest))} invoice is now ${daysLate} day${daysLate === 1 ? "" : "s"} late.`,
+    why: "Collecting these would add meaningful cushion to your projected cash position.",
+    basis: `Based on ${overdue.length} open invoice${overdue.length === 1 ? "" : "s"}`,
+    action: { label: "Review invoices", href: "/app/invoices" },
     evidence: overdue.map((inv) => ({
       type: "invoice",
       id: inv.id,
@@ -88,13 +104,20 @@ export async function getExpenseTrendInsight(businessId: string): Promise<Insigh
   if (Math.abs(percentChange) < 15) return null; // not worth surfacing as an insight
 
   const direction = percentChange > 0 ? "higher" : "lower";
+  const roundedPct = Math.abs(Math.round(percentChange));
 
   return {
     id: "expense-trend",
     kind: "CALCULATION",
-    severity: percentChange > 30 ? "warning" : "info",
-    title: `Spending is trending ${Math.abs(Math.round(percentChange))}% ${direction} than your recent average`,
-    detail: `Projected for this month: ${formatUsd(projectedCurrentTotal)}, vs. a ${formatUsd(Math.round(trailingMonthlyAvg))}/month average over the prior 3 months. This is a projection based on ${daysElapsedThisMonth} day${daysElapsedThisMonth === 1 ? "" : "s"} of data so far this month, not a final total.`,
+    severity: percentChange > 30 ? "attention" : "info",
+    headline: `Spending is trending ${roundedPct}% ${direction} than usual`,
+    explanation: `Projected for this month: ${formatUsd(projectedCurrentTotal)}, vs. a ${formatUsd(Math.round(trailingMonthlyAvg))}/month average over the prior 3 months.`,
+    why:
+      direction === "higher"
+        ? "If this holds for the rest of the month, it will eat into your margin."
+        : "That's cash staying in the business compared to your usual pace.",
+    basis: `Based on ${daysElapsedThisMonth} day${daysElapsedThisMonth === 1 ? "" : "s"} of data so far this month`,
+    action: { label: "View expenses", href: "/app/expenses" },
     evidence: currentMonthExpenses.slice(0, 10).map((e) => ({
       type: "expense",
       id: e.id,
@@ -126,16 +149,20 @@ export async function getCashTrendInsight(businessId: string): Promise<Insight |
   const netCents =
     addCents(...recentPayments.map((p) => p.amountCents)) -
     addCents(...recentExpenses.map((e) => e.amountCents));
+  const positive = netCents >= 0;
 
   return {
     id: "cash-trend-30d",
     kind: "CALCULATION",
-    severity: netCents < 0 ? "warning" : "info",
-    title:
-      netCents >= 0
-        ? `You brought in ${formatUsd(netCents)} more than you spent in the last 30 days`
-        : `You spent ${formatUsd(Math.abs(netCents))} more than you brought in over the last 30 days`,
-    detail: `Based on ${recentPayments.length} payment${recentPayments.length === 1 ? "" : "s"} received and ${recentExpenses.length} expense${recentExpenses.length === 1 ? "" : "s"} logged since ${thirtyDaysAgo.toLocaleDateString()}.`,
+    severity: positive ? "info" : "attention",
+    headline: positive
+      ? `You brought in ${formatUsd(netCents)} more than you spent this month`
+      : `You spent ${formatUsd(Math.abs(netCents))} more than you brought in this month`,
+    explanation: `${recentPayments.length} payment${recentPayments.length === 1 ? "" : "s"} received, ${recentExpenses.length} expense${recentExpenses.length === 1 ? "" : "s"} logged since ${thirtyDaysAgo.toLocaleDateString()}.`,
+    why: positive
+      ? "Your cash position is growing at your current pace."
+      : "Sustained over several months, this pace would draw down your cash reserve.",
+    basis: "Based on the last 30 days",
     evidence: [],
   };
 }
@@ -146,7 +173,7 @@ export async function getCashTrendInsight(businessId: string): Promise<Insight |
  * a separate guess, it's the exact same number surfaced proactively so the
  * owner doesn't have to go looking for it. A RECOMMENDATION (not a FACT):
  * it's built on the forecast's own stated assumptions, which are carried
- * through in `detail` rather than hidden.
+ * through rather than hidden.
  */
 export async function getRunwayWarningInsight(businessId: string): Promise<Insight | null> {
   const forecast90 = await computeForecast(businessId, 90);
@@ -162,8 +189,14 @@ export async function getRunwayWarningInsight(businessId: string): Promise<Insig
     id: "runway-warning",
     kind: "RECOMMENDATION",
     severity: "critical",
-    title: `At this pace, you're projected to run out of cash within ${first.horizonDays} days`,
-    detail: `Projected cash on ${new Date(first.targetDate).toLocaleDateString()}: ${formatUsd(first.projectedCashCents)}. This assumes your recurring expenses stay the same and you collect from open invoices at each customer's usual pace. Consider following up on overdue invoices or slowing down non-essential spending.${first.assumptions.length > 0 ? " " + first.assumptions.join(" ") : ""}`,
+    headline: `Projected to run short on cash within ${first.horizonDays} days`,
+    explanation: `Projected cash on ${new Date(first.targetDate).toLocaleDateString()}: ${formatUsd(first.projectedCashCents)}.`,
+    why: "Following up on overdue invoices or slowing non-essential spending now would change this trajectory.",
+    basis:
+      first.assumptions.length > 0
+        ? first.assumptions[0]!
+        : "Assumes recurring expenses stay the same and invoices collect at each customer's usual pace",
+    action: { label: "See full forecast", href: "/app/forecast" },
     evidence: [],
   };
 }
@@ -183,5 +216,5 @@ function startOfMonth(d: Date): Date {
 }
 
 function formatUsd(cents: number): string {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
+  return formatCentsCompact(cents);
 }
