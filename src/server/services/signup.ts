@@ -1,6 +1,7 @@
 import "server-only";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
+import { createBusinessForUser } from "@/server/services/businesses";
 
 export class EmailInUseError extends Error {
   constructor() {
@@ -9,22 +10,12 @@ export class EmailInUseError extends Error {
   }
 }
 
-const DEFAULT_CATEGORIES: { name: string; type: "INCOME" | "EXPENSE" }[] = [
-  { name: "Sales", type: "INCOME" },
-  { name: "Supplies", type: "EXPENSE" },
-  { name: "Rent", type: "EXPENSE" },
-  { name: "Software & Subscriptions", type: "EXPENSE" },
-  { name: "Payroll & Contractors", type: "EXPENSE" },
-  { name: "Insurance", type: "EXPENSE" },
-  { name: "Vehicle & Fuel", type: "EXPENSE" },
-  { name: "Marketing", type: "EXPENSE" },
-  { name: "Other", type: "EXPENSE" },
-];
-
 /**
- * Creates a User, their first Business, an OWNER Membership linking them,
- * and a starter set of expense categories — all inside one transaction so
- * we never end up with a half-created account.
+ * Creates a User and their first Business (with an OWNER Membership and
+ * starter categories) atomically — the same createBusinessForUser used
+ * when an existing user adds a second workspace, run inside this
+ * transaction so a failure partway through can't leave an orphaned user
+ * with no business.
  */
 export async function signUp(params: {
   name: string;
@@ -42,24 +33,7 @@ export async function signUp(params: {
     const user = await tx.user.create({
       data: { name: params.name, email, passwordHash },
     });
-    const business = await tx.business.create({
-      data: {
-        name: params.businessName,
-        memberships: { create: { userId: user.id, role: "OWNER", status: "ACTIVE" } },
-        categories: {
-          create: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, type: c.type, isSystem: true })),
-        },
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        businessId: business.id,
-        userId: user.id,
-        action: "business.create",
-        entityType: "Business",
-        entityId: business.id,
-      },
-    });
+    const business = await createBusinessForUser(user.id, params.businessName, tx);
     return { user, business };
   });
 }

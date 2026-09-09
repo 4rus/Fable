@@ -1,13 +1,11 @@
-import { requireUser } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
+import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
 import NewExpenseForm from "./NewExpenseForm";
 
 export default async function ExpensesPage() {
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
 
   const [expenses, categories] = await Promise.all([
     prisma.expense.findMany({

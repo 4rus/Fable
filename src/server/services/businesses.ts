@@ -1,5 +1,9 @@
 import "server-only";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { requireUser } from "@/server/tenant";
+import { ACTIVE_BUSINESS_COOKIE } from "@/lib/constants";
+import type { Prisma } from "@prisma/client";
 
 /** All businesses the given user has ACTIVE membership on. */
 export async function getMyBusinesses(userId: string) {
@@ -11,6 +15,103 @@ export async function getMyBusinesses(userId: string) {
   return memberships
     .filter((m) => !m.business.deletedAt)
     .map((m) => ({ ...m.business, role: m.role }));
+}
+
+/**
+ * Given the user's own business list (from getMyBusinesses — never trust a
+ * businessId from a cookie/header on its own) and a candidate businessId
+ * that came from client-controlled state (a cookie), pick the active
+ * business: the candidate if the user actually has active membership on
+ * it, otherwise fall back to their first business. This is the ONLY
+ * place a "remembered active business" cookie value is allowed to
+ * influence anything — every page still calls requireMembership()
+ * independently before touching data, so a forged cookie can at most
+ * pick which of the user's OWN businesses is shown, never someone else's.
+ */
+export function selectActiveBusiness<T extends { id: string }>(
+  businesses: T[],
+  candidateId: string | undefined,
+): T {
+  const match = candidateId ? businesses.find((b) => b.id === candidateId) : undefined;
+  return match ?? businesses[0]!;
+}
+
+/**
+ * The one call every page should use instead of the old
+ * `getMyBusinesses(userId)` + `businesses[0]!` pattern. Resolves the
+ * logged-in user, their full business list, their role on the active one,
+ * and which one is "active" (from the switcher cookie, validated against
+ * their real memberships — see selectActiveBusiness). Redirects to
+ * /signup if a user somehow has zero businesses (shouldn't happen via
+ * normal signup, but every page should fail safe rather than crash on
+ * `businesses[0]!`).
+ */
+export async function getActiveBusinessContext() {
+  const { userId, userEmail } = await requireUser();
+  const businesses = await getMyBusinesses(userId);
+  if (businesses.length === 0) {
+    return { userId, userEmail, businesses: [], business: null };
+  }
+
+  const store = await cookies();
+  const business = selectActiveBusiness(businesses, store.get(ACTIVE_BUSINESS_COOKIE)?.value);
+
+  return { userId, userEmail, businesses, business };
+}
+
+const DEFAULT_CATEGORIES: { name: string; type: "INCOME" | "EXPENSE" }[] = [
+  { name: "Sales", type: "INCOME" },
+  { name: "Supplies", type: "EXPENSE" },
+  { name: "Rent", type: "EXPENSE" },
+  { name: "Software & Subscriptions", type: "EXPENSE" },
+  { name: "Payroll & Contractors", type: "EXPENSE" },
+  { name: "Insurance", type: "EXPENSE" },
+  { name: "Vehicle & Fuel", type: "EXPENSE" },
+  { name: "Marketing", type: "EXPENSE" },
+  { name: "Other", type: "EXPENSE" },
+];
+
+/** Creates a Business, an OWNER Membership for the given (already
+ * authenticated) user, and a starter set of expense categories — used
+ * both at signup and when an existing user adds a second workspace.
+ *
+ * Accepts an optional transaction client so callers that need this
+ * atomic with a preceding write (signup: user + first business must
+ * succeed together or not at all) can pass their own `tx` in; standalone
+ * callers (adding a second workspace to an existing user) can omit it
+ * and get an internally-managed transaction. */
+export async function createBusinessForUser(
+  userId: string,
+  businessName: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) {
+  const run = async (tx: Prisma.TransactionClient | typeof prisma) => {
+    const business = await tx.business.create({
+      data: {
+        name: businessName,
+        memberships: { create: { userId, role: "OWNER", status: "ACTIVE" } },
+        categories: {
+          create: DEFAULT_CATEGORIES.map((c) => ({ name: c.name, type: c.type, isSystem: true })),
+        },
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        businessId: business.id,
+        userId,
+        action: "business.create",
+        entityType: "Business",
+        entityId: business.id,
+      },
+    });
+    return business;
+  };
+
+  // If the caller handed us their own transaction client, we're already
+  // inside a transaction — just run against it. Otherwise, wrap our own
+  // writes in one so a failure between business.create and the audit log
+  // can't leave a business with no audit trail.
+  return client === prisma ? prisma.$transaction((tx) => run(tx)) : run(client);
 }
 
 // ── Team management ────────────────────────────────────────────────────

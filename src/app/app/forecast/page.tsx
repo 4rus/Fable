@@ -1,12 +1,10 @@
-import { requireUser } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
+import { getActiveBusinessContext } from "@/server/services/businesses";
 import { computeForecast, getCurrentCashCents, getUpcomingReceivables } from "@/server/services/forecast";
 import { formatCentsCompact, formatCentsDelta } from "@/lib/money";
 
 export default async function ForecastPage() {
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
 
   const [currentCash, f30, f60, f90, upcoming] = await Promise.all([
     getCurrentCashCents(business.id),

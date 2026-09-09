@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { randomUUID } from "crypto";
-import { requireMembership, requireUser } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
+import { requireMembership } from "@/server/tenant";
+import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
@@ -11,9 +11,8 @@ import SendInvoiceButton from "./SendInvoiceButton";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
 
   // Tenant-scoped: the invoice must belong to a business this user has
   // active membership on. requireMembership already confirmed that above;

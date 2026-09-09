@@ -1,13 +1,11 @@
-import { requireUser, requireMembership } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
-import { listMembers } from "@/server/services/businesses";
+import { requireMembership } from "@/server/tenant";
+import { getActiveBusinessContext, listMembers } from "@/server/services/businesses";
 import AddMemberForm from "./AddMemberForm";
 import MemberRow from "./MemberRow";
 
 export default async function TeamPage() {
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { userId, business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
   const { role } = await requireMembership(business.id);
 
   const members = await listMembers(business.id);

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import {
   LogoMark,
   OverviewIcon,
@@ -22,11 +23,18 @@ const NAV = [
   { href: "/app/forecast", label: "Forecast", icon: ForecastIcon, exact: false },
 ];
 
+interface BusinessOption {
+  id: string;
+  name: string;
+}
+
 export default function Sidebar({
-  businessName,
+  businesses,
+  activeBusinessId,
   userEmail,
 }: {
-  businessName: string;
+  businesses: BusinessOption[];
+  activeBusinessId: string;
   userEmail: string;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -55,7 +63,8 @@ export default function Sidebar({
           <div className="absolute inset-0 bg-black/20" onClick={() => setMobileOpen(false)} />
           <div className="absolute inset-y-0 left-0 w-64">
             <SidebarContent
-              businessName={businessName}
+              businesses={businesses}
+              activeBusinessId={activeBusinessId}
               userEmail={userEmail}
               onNavigate={() => setMobileOpen(false)}
             />
@@ -65,7 +74,7 @@ export default function Sidebar({
 
       <aside className="hidden w-60 shrink-0 md:block">
         <div className="sticky top-0 h-screen">
-          <SidebarContent businessName={businessName} userEmail={userEmail} />
+          <SidebarContent businesses={businesses} activeBusinessId={activeBusinessId} userEmail={userEmail} />
         </div>
       </aside>
     </>
@@ -73,16 +82,17 @@ export default function Sidebar({
 }
 
 function SidebarContent({
-  businessName,
+  businesses,
+  activeBusinessId,
   userEmail,
   onNavigate,
 }: {
-  businessName: string;
+  businesses: BusinessOption[];
+  activeBusinessId: string;
   userEmail: string;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const initial = userEmail.charAt(0).toUpperCase();
 
@@ -93,25 +103,7 @@ function SidebarContent({
         <span className="text-[14px] font-semibold tracking-tight text-ink">Fable</span>
       </div>
 
-      <div className="relative px-3 pb-4">
-        <button
-          onClick={() => setWorkspaceOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-canvas"
-        >
-          <span className="min-w-0">
-            <span className="block truncate text-[13px] font-medium text-ink">{businessName}</span>
-            <span className="block text-[11px] text-muted">Workspace</span>
-          </span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="shrink-0 text-muted">
-            <path d="M7 10l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-        {workspaceOpen && (
-          <div className="absolute left-3 right-3 top-full z-10 mt-1 rounded-lg border border-line bg-surface px-3 py-2.5 text-[12px] text-muted shadow-card">
-            Multiple workspaces aren&apos;t supported yet — this is the only one on your account.
-          </div>
-        )}
-      </div>
+      <WorkspaceSwitcher businesses={businesses} activeBusinessId={activeBusinessId} />
 
       <nav className="flex-1 space-y-0.5 px-3">
         {NAV.map((item) => {

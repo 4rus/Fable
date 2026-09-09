@@ -1,15 +1,13 @@
 import Link from "next/link";
-import { requireUser } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
+import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
 import StatusChip from "@/components/StatusChip";
 
 export default async function InvoicesPage() {
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
 
   const invoices = await prisma.invoice.findMany({
     where: { businessId: business.id, deletedAt: null },

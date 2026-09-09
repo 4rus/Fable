@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { requireUser } from "@/server/tenant";
-import { getMyBusinesses } from "@/server/services/businesses";
+import { getActiveBusinessContext } from "@/server/services/businesses";
 import { getCurrentCashCents, computeForecast } from "@/server/services/forecast";
 import { getAllInsights, summarizeInsights } from "@/server/services/insights";
 import { formatCentsCompact } from "@/lib/money";
@@ -15,9 +14,8 @@ function dateline(): string {
 }
 
 export default async function DashboardPage() {
-  const { userId } = await requireUser();
-  const businesses = await getMyBusinesses(userId);
-  const business = businesses[0]!;
+  const { business: maybeBusiness } = await getActiveBusinessContext();
+  const business = maybeBusiness!;
 
   const [cashCents, f30, f90, insights] = await Promise.all([
     getCurrentCashCents(business.id),
