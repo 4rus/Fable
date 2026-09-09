@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
@@ -23,9 +24,14 @@ export default async function ExpensesPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="font-serif text-[26px] tracking-tight text-ink">Expenses</h1>
-        <p className="mt-1 text-sm text-muted">What&apos;s going out, and where.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="font-serif text-[26px] tracking-tight text-ink">Expenses</h1>
+          <p className="mt-1 text-sm text-muted">What&apos;s going out, and where.</p>
+        </div>
+        <Link href="/app/expenses/import" className="btn-secondary">
+          Import from CSV
+        </Link>
       </div>
 
       <NewExpenseForm businessId={business.id} categories={categories} />

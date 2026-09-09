@@ -21,6 +21,12 @@ test("signup → invoice → payment → insight", async ({ page }) => {
   const password = "e2e-test-password-123";
   const businessName = `E2E Test Co ${runId}`;
   const customerName = `E2E Test Customer ${runId}`;
+  // A business's "current cash" only counts activity strictly after its
+  // startingCashAsOf cutoff, which is set to the moment of signup (see
+  // getCurrentCashCents) — a hardcoded past date here would silently fall
+  // before that cutoff and never count, which looks exactly like a real
+  // bug (cash inexplicably not updating) without being one. Match today.
+  const today = new Date().toISOString().slice(0, 10);
 
   await test.step("sign up", async () => {
     await page.goto("/signup");
@@ -125,10 +131,35 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     await expect(page.getByText("$0.00").first()).toBeVisible();
   });
 
-  await test.step("the dashboard reflects the real cash position after the payment", async () => {
+  await test.step("import expenses from a CSV, skipping the deposit row without guessing an invoice match", async () => {
+    await page.goto("/app/expenses/import");
+    const csv = [
+      "Date,Description,Amount",
+      `${today},Coffee Shop,-15.00`,
+      `${today},Mystery Deposit,300.00`, // must be skipped, never turned into a payment
+    ].join("\n");
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "statement.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from(csv),
+    });
+    await page.getByRole("button", { name: "Preview import" }).click();
+
+    await expect(page.getByText("Found 1 expense")).toBeVisible();
+    await expect(page.getByText("1 deposit skipped")).toBeVisible();
+    await expect(page.getByText("Coffee Shop")).toBeVisible();
+    // The skipped deposit must never appear as an importable row.
+    await expect(page.getByText("Mystery Deposit")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Import 1 expense" }).click();
+    await expect(page.getByText("Imported 1 expense")).toBeVisible();
+  });
+
+  await test.step("the dashboard reflects the real cash position after the payment and import", async () => {
     await page.goto("/app");
-    // $200 collected minus the $42.50 expense = $157.50 — the real number,
-    // not a fabricated or stale one.
-    await expect(page.getByText("$157.50").first()).toBeVisible();
+    // $200 collected, minus the $42.50 manual expense, minus the $15.00
+    // imported expense = $142.50 — every one of these numbers traceable
+    // back to a real action taken earlier in this test.
+    await expect(page.getByText("$142.50").first()).toBeVisible();
   });
 });
