@@ -1,12 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AuthShell from "@/components/marketing/AuthShell";
 
+// useSearchParams() opts the tree it's in out of static prerendering unless
+// wrapped in Suspense (Next.js requirement — see
+// https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout).
+// The fallback renders instantly in practice: this is a client navigation
+// in every real flow (the signup redirect, or clicking "Sign in"), so
+// there's no meaningful loading window a user would ever see.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<AuthShellFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function AuthShellFallback() {
+  return (
+    <AuthShell
+      statement="Your business is already generating the answers."
+      support="Fable helps you see them — where you stand, what changed, and what deserves your attention today."
+    >
+      <div className="h-64" aria-hidden />
+    </AuthShell>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const justCreated = params.get("created") === "1";

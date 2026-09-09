@@ -155,8 +155,37 @@ Redis-backed limiter before running more than one server process).
 **File uploads** (expense receipts, invoice attachments): validated by
 actual content sniffing (not just the claimed MIME type or extension),
 size-capped, stored under a per-tenant path, and only ever served through
-an authorization-checked route — never a public/guessable URL. See
-`src/server/services/attachments.ts`.
+an authorization-checked route — never a public/guessable URL. Filenames
+are also stripped of control characters (`src/lib/validation/attachments.ts`)
+before being embedded in the download route's `Content-Disposition`
+header. See `src/server/services/attachments.ts`.
+
+**HTTP security headers** (`next.config.mjs`, applied to every response):
+`X-Frame-Options: DENY` and a `Content-Security-Policy` with
+`frame-ancestors 'none'` (clickjacking), `X-Content-Type-Options: nosniff`
+(MIME sniffing), `Referrer-Policy: strict-origin-when-cross-origin`,
+`Permissions-Policy` disabling camera/mic/geolocation, and HSTS. The CSP's
+`script-src`/`style-src` need `'unsafe-inline'` because the App Router
+injects its own inline RSC-hydration `<script>` tags — tightening that to
+a nonce-based CSP (via `middleware.ts` generating a per-request nonce) is
+real follow-up work, not done yet. `'unsafe-eval'` is added to `script-src`
+in development only (`next dev`'s webpack HMR needs it); the production
+CSP does not include it.
+
+**Security audit log.** Beyond the ephemeral stdout structured logger
+(`src/lib/logger.ts`), sensitive account/business events are written to
+the durable `AuditLog` table: business creation, team member add/revoke,
+payment recording, and password resets (`action: "auth.password_reset"`,
+no token/password material in the row). Query it per-user or per-business
+for security review rather than grepping logs.
+
+**Known dependency vulnerabilities (audited, deferred):** `npm audit`
+currently reports issues in `esbuild`/`vite` (via `vitest`'s dev-server
+bundling) and `postcss` (bundled inside `next`'s own build pipeline).
+Both are **build-time-only** tooling dependencies, not runtime code paths
+an attacker hitting the deployed app could reach — fixing them requires a
+major-version bump (Vitest 5, Next 16) that deserves its own dedicated,
+tested upgrade pass rather than being folded into a security review.
 
 **What is NOT implemented yet, on purpose:** email-based invitations
 (adding a team member currently requires them to already have an

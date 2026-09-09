@@ -74,5 +74,18 @@ export async function resetPassword(token: string, newPassword: string): Promise
       where: { userId: record.userId, usedAt: null, id: { not: record.id } },
       data: { usedAt: new Date() },
     }),
+    // A password reset is a sensitive account-security event worth a
+    // durable, queryable record beyond the ephemeral stdout logger — e.g.
+    // to spot an account that's had several resets in a short window.
+    // No token/password material goes into metadata, only the fact that
+    // it happened.
+    prisma.auditLog.create({
+      data: {
+        userId: record.userId,
+        action: "auth.password_reset",
+        entityType: "User",
+        entityId: record.userId,
+      },
+    }),
   ]);
 }

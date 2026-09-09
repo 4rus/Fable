@@ -35,8 +35,20 @@ export function sniffAttachmentType(buffer: Buffer): AllowedAttachmentType | nul
 /** Strips path separators and other characters that would let a filename
  * escape its intended directory or confuse a downstream renderer —
  * defense in depth on top of the fact that we never actually use the
- * client filename to build a filesystem path (see attachments.ts). */
+ * client filename to build a filesystem path (see attachments.ts).
+ *
+ * Also strips control characters (CR/LF and other C0/C1 codes). This
+ * filename is later embedded in a Content-Disposition response header
+ * (see the attachments download route) — Node rejects header values
+ * containing raw CR/LF outright, which would otherwise turn an oddly-
+ * named upload into a 500 on every future download of it, and stripping
+ * them here closes off any theoretical header-injection vector too. */
 export function sanitizeFilename(name: string): string {
-  const base = name.replace(/[/\\]/g, "_").replace(/\.\./g, "_").trim();
+  const base = name
+    .replace(/[/\\]/g, "_")
+    .replace(/\.\./g, "_")
+    // eslint-disable-next-line no-control-regex -- deliberately matching control chars to strip them
+    .replace(/[\x00-\x1f\x7f]/g, "_")
+    .trim();
   return base.slice(0, 200) || "attachment";
 }
