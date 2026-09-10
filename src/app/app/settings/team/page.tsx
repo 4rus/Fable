@@ -11,7 +11,7 @@ export default async function TeamPage() {
   const members = await listMembers(business.id);
 
   return (
-    <div className="max-w-xl space-y-8">
+    <div className="space-y-8">
       <div>
         <h1 className="font-serif text-[26px] tracking-tight text-ink">Team</h1>
         <p className="mt-1 text-sm text-muted">Who has access to {business.name}</p>

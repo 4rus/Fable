@@ -100,6 +100,12 @@ src/
   lib/
     money.ts               The ONLY module that does money math. Integer
                            cents everywhere; never a float.
+    totp.ts                Hand-rolled TOTP (RFC 6238) for two-factor auth
+                           — no dependency, unit-tested against RFC 4226's
+                           official vectors.
+    crypto.ts               AES-256-GCM encrypt/decrypt for secrets that
+                           must be read back in plaintext (2FA secrets
+                           today; bank-provider tokens once Phase E lands).
     validation/*.ts        Zod schemas for every server-side input boundary.
     types.ts               Enum-shaped string unions (see "Database" below
                            for why these are strings, not Prisma enums).
@@ -187,13 +193,31 @@ an attacker hitting the deployed app could reach — fixing them requires a
 major-version bump (Vitest 5, Next 16) that deserves its own dedicated,
 tested upgrade pass rather than being folded into a security review.
 
+**Two-factor authentication (TOTP)** is real, not mocked — and hand-rolled
+rather than a dependency (`src/lib/totp.ts`), the same way `src/lib/money.ts`
+owns money math directly instead of reaching for a library. Compatible
+with any standard authenticator app (SHA-1, 6 digits, 30s step). The
+secret is encrypted at rest (`src/lib/crypto.ts`, AES-256-GCM, key from
+`ENCRYPTION_KEY`) since verifying a code needs the plaintext back, unlike
+a password. 10 single-use backup codes (SHA-256-hashed) are issued on
+enrollment for recovery if the authenticator device is lost. Login is a
+two-step flow: `checkCredentialsAction` verifies the password first
+(sharing the exact same rate-limit bucket as the real sign-in, so it
+can't be used to dodge brute-force limits) and reports whether a code is
+needed; NextAuth's `authorize()` (`src/lib/auth.ts`) independently
+re-verifies both password and code together before minting a session —
+there is no "logged in but not fully" intermediate session state. See
+`src/server/services/twoFactor.ts` and `tests/totp.test.ts` (verified
+against the official RFC 4226 test vectors), `tests/two-factor.test.ts`,
+and `tests/crypto.test.ts`. Manage it at `/app/settings/security`.
+
 **What is NOT implemented yet, on purpose:** email-based invitations
 (adding a team member currently requires them to already have an
-account — see the comment in `src/server/services/businesses.ts`), 2FA,
-and account/business deletion. These are real gaps for a production
-launch, not oversights — each needs deliberate design (especially
-deletion, which has to reconcile "let a user leave" against "don't
-destroy financial records that may need retention").
+account — see the comment in `src/server/services/businesses.ts`),
+passkeys/WebAuthn, and account/business deletion. These are real gaps
+for a production launch, not oversights — each needs deliberate design
+(especially deletion, which has to reconcile "let a user leave" against
+"don't destroy financial records that may need retention").
 
 **Password reset** (`src/server/services/password-reset.ts`) is real,
 not mocked: a single-use, 30-minute, SHA-256-hashed token is created and
