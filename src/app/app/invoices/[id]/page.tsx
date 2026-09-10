@@ -49,8 +49,13 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             <StatusChip status={invoice.status} />
           </div>
         </div>
-        {invoice.status === "DRAFT" && (
-          <SendInvoiceButton businessId={business.id} invoiceId={invoice.id} />
+        {invoice.status !== "VOID" && (
+          <SendInvoiceButton
+            businessId={business.id}
+            invoiceId={invoice.id}
+            customerHasEmail={!!invoice.customer.email}
+            alreadySent={invoice.status !== "DRAFT"}
+          />
         )}
       </div>
 

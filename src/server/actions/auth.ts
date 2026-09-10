@@ -11,6 +11,7 @@ import {
   resetPassword,
   InvalidResetTokenError,
 } from "@/server/services/password-reset";
+import { sendEmail } from "@/lib/email";
 
 export type SignupFormState = { error?: string };
 
@@ -64,11 +65,13 @@ const RESET_REQUEST_WINDOW_MS = 60 * 60 * 1000; // per hour, per IP
  * whether the email matched an account — this is the one place we must
  * NOT reveal account existence via response shape or timing shortcuts.
  *
- * No email provider is configured in this environment (see README "known
- * gaps"). The token this creates is real, single-use, and expires in 30
- * minutes — but until mail delivery is wired in, the link is returned
- * directly in `resetLink` instead of emailed, so the flow stays testable
- * end to end without pretending an email was sent.
+ * The token this creates is always real, single-use, and expires in 30
+ * minutes. Delivery has two honest paths (src/lib/email.ts):
+ *  - RESEND_API_KEY configured: actually emails the link; the response
+ *    carries no `resetLink` at all, since it genuinely went out.
+ *  - Not configured: falls back to surfacing the link directly in the
+ *    response (clearly labeled "Development mode" in the UI) instead of
+ *    pretending an email was sent.
  */
 export async function requestPasswordResetAction(
   _prevState: RequestResetFormState,
@@ -87,9 +90,21 @@ export async function requestPasswordResetAction(
 
   try {
     const result = await requestPasswordReset(parsed.data.email);
+    if (!result) return { submitted: true }; // no matching account — same response either way
+
+    const origin = (process.env.NEXTAUTH_URL ?? "http://localhost:3000").replace(/\/$/, "");
+    const link = `${origin}/reset-password?token=${result.token}`;
+
+    const emailResult = await sendEmail({
+      to: parsed.data.email,
+      subject: "Reset your Fable password",
+      text: `Reset your password: ${link}\n\nThis link expires in 30 minutes. If you didn't request this, ignore this email.`,
+      html: `<p>Reset your password by clicking the link below. It expires in 30 minutes.</p><p><a href="${link}">${link}</a></p><p>If you didn't request this, ignore this email.</p>`,
+    });
+
     return {
       submitted: true,
-      resetLink: result ? `/reset-password?token=${result.token}` : undefined,
+      resetLink: emailResult.sent ? undefined : `/reset-password?token=${result.token}`,
     };
   } catch (err) {
     logError("password reset request failed", err);

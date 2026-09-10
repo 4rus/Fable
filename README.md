@@ -222,12 +222,31 @@ for a production launch, not oversights — each needs deliberate design
 **Password reset** (`src/server/services/password-reset.ts`) is real,
 not mocked: a single-use, 30-minute, SHA-256-hashed token is created and
 validated server-side, and a successful reset invalidates every other
-outstanding token for that user. What's still a placeholder is
-*delivery* — no email provider is configured in this environment, so
-`/forgot-password` prints the reset link directly on the page (clearly
-labeled "Development mode") instead of emailing it. Wiring in a real
-mail provider (Resend, Postmark, SES) only changes how the link is
-delivered, not the token logic itself.
+outstanding token for that user. *Delivery* goes through the shared
+email layer below — real if `RESEND_API_KEY` is set, an honest
+dev-mode fallback (the link is printed directly on the page, clearly
+labeled "Development mode") if not.
+
+**Outbound email** (`src/lib/email.ts`) is a single `sendEmail()` seam
+used by both password reset and invoice sending, backed by
+[Resend](https://resend.com). Two states, both real — never a fake
+"sent!" — see the type it returns: `{ sent: true }` on actual delivery,
+or `{ sent: false, reason: "not_configured" | "send_failed" }` when it
+isn't. Set `RESEND_API_KEY` (and `EMAIL_FROM`) to turn it on; without a
+verified domain, Resend's free tier only delivers to the email on your
+own Resend account, which is enough for development but not for real
+customers.
+
+**Invoice PDFs + "send invoice"** (`src/lib/pdf/invoice.tsx`,
+`src/server/services/invoiceEmail.ts`) are real. "Send by email" on an
+invoice renders an actual PDF (`@react-pdf/renderer`, standard fonts —
+not the web app's Fraunces/Inter, see the comment in that file for why)
+and emails it as an attachment to the customer via the layer above; the
+invoice only advances `DRAFT → SENT` on confirmed delivery, never
+speculatively. If email isn't configured or the customer has no email
+on file, the UI says so plainly and offers "Mark as sent" — a manual,
+honest status flip for when the business sent the invoice some other
+way — instead of silently failing or lying about delivery.
 
 **CSV import** (`src/server/services/csvImport.ts`) only ever creates
 expenses (money out). A positive amount in a bank export is a deposit —
