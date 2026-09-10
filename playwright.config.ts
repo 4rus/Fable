@@ -30,6 +30,9 @@ export default defineConfig({
       DATABASE_URL: `file:${E2E_DB_PATH}`,
       NEXTAUTH_URL: `http://localhost:${PORT}`,
       NEXTAUTH_SECRET: "e2e-test-secret-not-for-production-use-only",
+      // 32 raw bytes, base64-encoded — required by src/lib/crypto.ts (used
+      // for 2FA secrets). Test-only value, never used outside this suite.
+      ENCRYPTION_KEY: "ZTJlLXRlc3Qtb25seS1lbmNyeXB0aW9uLWtleS0zMmI=",
     },
   },
 });

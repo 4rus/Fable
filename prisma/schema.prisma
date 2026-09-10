@@ -42,11 +42,40 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  /// Two-factor auth (TOTP). `twoFactorSecretEncrypted` is set as soon as
+  /// setup begins but `twoFactorEnabled` stays false until the user proves
+  /// they can actually generate a valid code (see confirmTwoFactorSetup in
+  /// src/server/services/twoFactor.ts) -- a secret alone doesn't mean 2FA
+  /// is protecting the account yet. Encrypted at rest (src/lib/crypto.ts)
+  /// because, unlike a password, we need the plaintext back to compute
+  /// HOTP against a submitted code -- hashing isn't an option here.
+  twoFactorEnabled         Boolean @default(false)
+  twoFactorSecretEncrypted String?
+
   memberships         Membership[]
   auditLogs           AuditLog[]
   passwordResetTokens PasswordResetToken[]
+  twoFactorBackupCodes TwoFactorBackupCode[]
 
   @@map("users")
+}
+
+/// Single-use recovery codes for when a user has 2FA enabled but has lost
+/// their authenticator device. Hashed with SHA-256 (not bcrypt) -- same
+/// reasoning as PasswordResetToken: these are high-entropy generated
+/// values, not user-chosen low-entropy secrets, so there's no brute-force
+/// concern a slow hash would meaningfully mitigate that a fast one doesn't.
+model TwoFactorBackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("two_factor_backup_codes")
 }
 
 /// Password reset. We store a SHA-256 hash of the token, never the token

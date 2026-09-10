@@ -1,13 +1,9 @@
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/db";
 import { loginSchema } from "@/lib/validation/auth";
-import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
-import { logWarn } from "@/lib/logger";
-
-const LOGIN_LIMIT = 10; // attempts
-const LOGIN_WINDOW_MS = 10 * 60 * 1000; // per 10 minutes
+import { getClientIp } from "@/lib/rate-limit";
+import { verifyCredentials } from "@/server/services/login";
+import { verifyTwoFactorCode } from "@/server/services/twoFactor";
 
 /**
  * AUTHENTICATION (answers "who are you?"), not authorization.
@@ -21,6 +17,16 @@ const LOGIN_WINDOW_MS = 10 * 60 * 1000; // per 10 minutes
  * session can. Acceptable for MVP; if we need immediate revocation
  * (e.g. "log out all devices" after a password change), the documented
  * P1 path is switching to database sessions via the Prisma adapter.
+ *
+ * Two-factor auth: password verification lives in
+ * src/server/services/login.ts (verifyCredentials), shared with the
+ * pre-signIn checkCredentialsAction the login form calls first to decide
+ * whether to show a code field — see that file's comment for why sharing
+ * it matters for rate-limiting. If the account has 2FA enabled, a valid
+ * `totpCode` credential (checked against a live TOTP code OR an unused
+ * backup code) is required in the SAME authorize() call as the password;
+ * there's no separate "logged in but not fully" session state — you're
+ * either fully authenticated or not authenticated at all.
  */
 export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
@@ -31,6 +37,7 @@ export const authOptions: AuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        totpCode: { label: "Two-factor code", type: "text" },
       },
       async authorize(raw, req) {
         // Never trust client input, even for auth fields. Validate shape
@@ -39,30 +46,20 @@ export const authOptions: AuthOptions = {
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
 
-        // Brute-force protection. Keyed on IP+email together (not just
-        // email) so an attacker can't lock a real user out by hammering
-        // their address from many IPs into one shared bucket, and a
-        // shared/corporate IP with many legitimate users isn't starved by
-        // one person's typos. On limit exceeded we fall through to the
-        // SAME generic failure as a wrong password — revealing "you're
-        // rate-limited" vs "that password is wrong" would itself be an
-        // oracle an attacker could use to enumerate valid emails.
         const ip = getClientIp(new Headers(req.headers as HeadersInit));
-        const rate = checkRateLimit(`login:${ip}:${email.toLowerCase()}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
-        if (!rate.allowed) {
-          logWarn("login rate limit exceeded", { ip, email: email.toLowerCase() });
-          return null;
-        }
+        const user = await verifyCredentials(email, password, ip);
+        if (!user) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { email: email.toLowerCase() },
-        });
-        // Deliberately generic failure path: do the bcrypt compare against
-        // a dummy hash even when no user exists, so response timing doesn't
-        // leak which emails are registered (basic enumeration resistance).
-        const hashToCompare = user?.passwordHash ?? DUMMY_HASH;
-        const valid = await bcrypt.compare(password, hashToCompare);
-        if (!user || !valid) return null;
+        if (user.twoFactorEnabled) {
+          const totpCode = typeof raw?.totpCode === "string" ? raw.totpCode : "";
+          // Same generic failure as a wrong password — a bare "code
+          // required" vs. "code wrong" distinction isn't sensitive here
+          // (the caller already proved they know the password to get this
+          // far), but there's no reason to hand back anything more
+          // specific than NextAuth's own generic CredentialsSignin error.
+          const codeValid = totpCode !== "" && (await verifyTwoFactorCode(user.id, totpCode));
+          if (!codeValid) return null;
+        }
 
         return { id: user.id, email: user.email, name: user.name };
       },
@@ -81,7 +78,3 @@ export const authOptions: AuthOptions = {
     },
   },
 };
-
-// A real bcrypt hash of a random value, used only to equalize timing when
-// no matching user is found. Never a real credential.
-const DUMMY_HASH = "$2a$10$CwTycUXWue0Thq9StjUM0uJ8lqfyd1rG4XX9EbeM.0DFhrN3VYW7C";
