@@ -12,6 +12,11 @@ import {
   OverpaymentError,
   InvalidInvoiceStateError,
 } from "@/server/services/invoices";
+import {
+  sendInvoiceEmail,
+  MissingCustomerEmailError,
+  InvoiceNotSendableError,
+} from "@/server/services/invoiceEmail";
 import { ForbiddenError } from "@/server/tenant";
 
 export type ActionState = { error?: string };
@@ -56,11 +61,49 @@ export async function createInvoiceAction(
   redirect(`/app/invoices/${invoiceId}`);
 }
 
+/** Manual fallback: flips DRAFT -> SENT without emailing anything, for
+ * when the business already sent the invoice some other way (in person,
+ * their own email client) and just wants Fable's status to match reality. */
 export async function sendInvoiceAction(businessId: string, invoiceId: string) {
   const ctx = await requireMembership(businessId);
   await markInvoiceSent(ctx.businessId, invoiceId);
   revalidatePath(`/app/invoices/${invoiceId}`);
   revalidatePath("/app/invoices");
+}
+
+export type SendInvoiceEmailActionState =
+  | { status: "idle" }
+  | { status: "sent" }
+  | { status: "not_configured" }
+  | { status: "error"; error: string };
+
+/** The real path: renders a PDF and actually emails it to the customer
+ * (src/server/services/invoiceEmail.ts), only advancing DRAFT -> SENT on
+ * confirmed delivery. */
+export async function sendInvoiceEmailAction(
+  businessId: string,
+  invoiceId: string,
+): Promise<SendInvoiceEmailActionState> {
+  const ctx = await requireMembership(businessId);
+
+  try {
+    const result = await sendInvoiceEmail(ctx.businessId, invoiceId);
+    if (!result.delivered) {
+      if (result.reason === "not_configured") return { status: "not_configured" };
+      return { status: "error", error: "Could not send the email. Please try again." };
+    }
+  } catch (err) {
+    if (err instanceof MissingCustomerEmailError || err instanceof InvoiceNotSendableError) {
+      return { status: "error", error: err.message };
+    }
+    if (err instanceof ForbiddenError) return { status: "error", error: err.message };
+    logError("sendInvoiceEmail failed", err);
+    return { status: "error", error: "Could not send the email. Please try again." };
+  }
+
+  revalidatePath(`/app/invoices/${invoiceId}`);
+  revalidatePath("/app/invoices");
+  return { status: "sent" };
 }
 
 export async function recordPaymentAction(
