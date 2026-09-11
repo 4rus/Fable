@@ -1,7 +1,6 @@
 import { requireMembership } from "@/server/tenant";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { listBankConnections } from "@/server/services/bank/connections";
-import { formatCents } from "@/lib/money";
 import ConnectBankButton from "./ConnectBankButton";
 import ConnectionCard from "./ConnectionCard";
 
@@ -36,12 +35,7 @@ export default async function BankPage() {
       ) : (
         <div className="space-y-4">
           {connections.map((c) => (
-            <ConnectionCard
-              key={c.id}
-              businessId={business.id}
-              connection={c}
-              formatBalance={(cents, currency) => formatCents(cents, currency)}
-            />
+            <ConnectionCard key={c.id} businessId={business.id} connection={c} />
           ))}
         </div>
       )}

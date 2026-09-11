@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { syncNowAction, disconnectConnectionAction } from "@/server/actions/bank";
+import { formatCents } from "@/lib/money";
 
 interface Account {
   id: string;
@@ -37,11 +38,9 @@ function timeAgo(date: Date): string {
 export default function ConnectionCard({
   businessId,
   connection,
-  formatBalance,
 }: {
   businessId: string;
   connection: Connection;
-  formatBalance: (cents: number, currency: string) => string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -102,7 +101,7 @@ export default function ConnectionCard({
                 {a.mask && <span className="text-muted"> ····{a.mask}</span>}
               </span>
               <span className="tabular-nums text-ink">
-                {a.currentBalanceCents != null ? formatBalance(a.currentBalanceCents, a.isoCurrencyCode) : "—"}
+                {a.currentBalanceCents != null ? formatCents(a.currentBalanceCents, a.isoCurrencyCode) : "—"}
               </span>
             </li>
           ))}
