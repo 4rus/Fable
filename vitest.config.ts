@@ -12,6 +12,13 @@ export default defineConfig({
     // `npm run test:e2e`) — excluded here so Vitest doesn't try to collect
     // them as its own tests.
     exclude: ["**/node_modules/**", "**/e2e/**"],
+    // Every test file gets its own PrismaClient (its own connection pool,
+    // capped at 3 -- see tests/db-url.ts) against the SAME Supabase
+    // project, whose session-mode pooler hard-caps the whole project at
+    // 15 concurrent connections. Left at Vitest's default (one worker per
+    // CPU core), that alone can exceed the cap before a single query
+    // runs. 4 workers x 3 connections = 12, safely under it.
+    poolOptions: { threads: { maxThreads: 4, minThreads: 1 } },
   },
   resolve: {
     alias: {
