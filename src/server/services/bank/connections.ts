@@ -10,6 +10,7 @@ import {
   syncTransactionsPage,
   removeItem,
 } from "./plaidClient";
+import { categorizeBySavedRule } from "./categorization";
 
 /**
  * Provider-agnostic bank connectivity — the domain layer everything
@@ -206,6 +207,12 @@ export async function syncBankConnection(businessId: string, connectionId: strin
       const financialAccountId = accountsByProviderId.get(t.providerAccountId);
       if (!financialAccountId) continue; // account not tracked on this connection (shouldn't happen; skip defensively rather than throw mid-sync)
 
+      // High-confidence categorization ONLY (a rule this business itself
+      // taught us — see categorization.ts) is applied automatically, and
+      // ONLY in the `create` branch below: it must never overwrite a
+      // category the user already set by hand on an update pass.
+      const autoCategory = await categorizeBySavedRule(businessId, t.merchantName, t.description);
+
       await prisma.transaction.upsert({
         where: { providerTransactionId: t.providerTransactionId },
         create: {
@@ -220,6 +227,8 @@ export async function syncBankConnection(businessId: string, connectionId: strin
           description: t.description,
           pending: t.pending,
           providerCategory: t.providerCategory,
+          categoryId: autoCategory?.categoryId,
+          categorySource: autoCategory?.source,
         },
         update: {
           amountCents: t.amountCents,
@@ -276,12 +285,13 @@ export async function syncBankConnection(businessId: string, connectionId: strin
 }
 
 /**
- * Read-only list of synced transactions for display (src/app/app/bank/page.tsx).
- * This is intentionally the ONLY thing done with Transaction rows right
- * now — no categorization, no matching to Expense/Payment/invoices. That
- * reconciliation is Phase G, not implemented, and this function must
- * never be mistaken for it: it exists so a connected account shows real
- * evidence of syncing, not to turn a Transaction into anything else.
+ * Read-only list of synced transactions for display
+ * (src/app/app/bank/page.tsx, the "Recent activity" feed). Categorization
+ * and reconciliation into Expense/Payment rows (Phase G) happen elsewhere
+ * — see src/server/services/bank/categorization.ts and reconciliation.ts,
+ * and the "Needs attention" review list built on top of them. This
+ * function stays deliberately dumb: real evidence that syncing worked,
+ * nothing more.
  */
 export async function listRecentTransactions(businessId: string, limit = 50) {
   return prisma.transaction.findMany({
@@ -295,6 +305,7 @@ export async function listRecentTransactions(businessId: string, limit = 50) {
       description: true,
       pending: true,
       providerCategory: true,
+      category: { select: { name: true } },
       financialAccount: { select: { name: true, mask: true } },
     },
     orderBy: { postedDate: "desc" },

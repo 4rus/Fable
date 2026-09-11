@@ -8,6 +8,7 @@ interface TransactionRow {
   merchantName: string | null;
   description: string;
   pending: boolean;
+  category: { name: string } | null;
   financialAccount: { name: string; mask: string | null };
 }
 
@@ -34,6 +35,7 @@ export default function RecentTransactions({ transactions }: { transactions: Tra
                 {t.postedDate.toLocaleDateString()} · {t.financialAccount.name}
                 {t.financialAccount.mask && ` ····${t.financialAccount.mask}`}
                 {t.pending && " · Pending"}
+                {t.category && ` · ${t.category.name}`}
               </p>
             </div>
             <span
