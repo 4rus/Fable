@@ -60,6 +60,14 @@ export const ForecastIcon = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
+export const BankIcon = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M3 9.5 12 4l9 5.5" />
+    <path d="M4.5 9.5V19M9 9.5V19M15 9.5V19M19.5 9.5V19" />
+    <path d="M3 19h18" />
+  </Icon>
+);
+
 export const SettingsIcon = (p: SVGProps<SVGSVGElement>) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="3" />

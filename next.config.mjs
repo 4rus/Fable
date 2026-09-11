@@ -21,6 +21,15 @@
  * runs against `next dev`, until this was scoped to dev-only). Production
  * builds don't use eval-based bundling, so the production CSP stays
  * eval-free.
+ *
+ * Plaid Link (src/app/app/bank/ConnectBankButton.tsx) needs three
+ * explicit allowances, per Plaid's own documented CSP requirements
+ * (https://plaid.com/docs/link/web/): its script from cdn.plaid.com
+ * (script-src), the Link UI itself, which runs in an iframe served from
+ * cdn.plaid.com (frame-src), and its own network calls once open,
+ * which — since PLAID_ENV can be sandbox/development/production and this
+ * header is static, not per-request — allow all three Plaid API hosts
+ * rather than only whichever one happens to be configured right now.
  */
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -39,11 +48,12 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+      `script-src 'self' 'unsafe-inline' https://cdn.plaid.com${isDev ? " 'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://production.plaid.com https://development.plaid.com https://sandbox.plaid.com",
+      "frame-src https://cdn.plaid.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",

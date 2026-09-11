@@ -26,9 +26,11 @@
     "csv-parse": "^7.0.2",
     "next": "15.5.25",
     "next-auth": "^4.24.10",
+    "plaid": "^47.0.0",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-plaid-link": "^5.0.0",
     "resend": "^6.27.0",
     "server-only": "^0.0.1",
     "zod": "^3.23.8"
