@@ -274,3 +274,30 @@ export async function syncBankConnection(businessId: string, connectionId: strin
 
   return { addedCount, modifiedCount, removedCount };
 }
+
+/**
+ * Read-only list of synced transactions for display (src/app/app/bank/page.tsx).
+ * This is intentionally the ONLY thing done with Transaction rows right
+ * now — no categorization, no matching to Expense/Payment/invoices. That
+ * reconciliation is Phase G, not implemented, and this function must
+ * never be mistaken for it: it exists so a connected account shows real
+ * evidence of syncing, not to turn a Transaction into anything else.
+ */
+export async function listRecentTransactions(businessId: string, limit = 50) {
+  return prisma.transaction.findMany({
+    where: { businessId, deletedAt: null },
+    select: {
+      id: true,
+      amountCents: true,
+      isoCurrencyCode: true,
+      postedDate: true,
+      merchantName: true,
+      description: true,
+      pending: true,
+      providerCategory: true,
+      financialAccount: { select: { name: true, mask: true } },
+    },
+    orderBy: { postedDate: "desc" },
+    take: limit,
+  });
+}
