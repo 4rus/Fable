@@ -12,6 +12,7 @@ import {
   CustomersIcon,
   ExpensesIcon,
   ForecastIcon,
+  BankIcon,
   SettingsIcon,
 } from "@/components/icons";
 
@@ -21,6 +22,7 @@ const NAV = [
   { href: "/app/customers", label: "Customers", icon: CustomersIcon, exact: false },
   { href: "/app/expenses", label: "Expenses", icon: ExpensesIcon, exact: false },
   { href: "/app/forecast", label: "Forecast", icon: ForecastIcon, exact: false },
+  { href: "/app/bank", label: "Bank", icon: BankIcon, exact: false },
 ];
 
 interface BusinessOption {

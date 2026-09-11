@@ -150,16 +150,151 @@ model Business {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  memberships Membership[]
-  customers   Customer[]
-  categories  Category[]
-  invoices    Invoice[]
-  payments    Payment[]
-  expenses    Expense[]
-  attachments Attachment[]
-  auditLogs   AuditLog[]
+  memberships     Membership[]
+  customers       Customer[]
+  categories      Category[]
+  invoices        Invoice[]
+  payments        Payment[]
+  expenses        Expense[]
+  attachments     Attachment[]
+  auditLogs        AuditLog[]
+  bankConnections  BankConnection[]
+  financialAccounts FinancialAccount[]
+  transactions     Transaction[]
 
   @@map("businesses")
+}
+
+// ── Bank connectivity (Phase E) ─────────────────────────────────────────
+//
+// PROVIDER ABSTRACTION: this domain (BankConnection / FinancialAccount /
+// Transaction) must never leak into the rest of the app as "Plaid
+// concepts." Every model below has a `provider` field and stores
+// provider-native IDs, but the shapes themselves (a connection, an
+// account, a transaction) are provider-agnostic — another provider
+// (Flinks, etc.) could be added later by writing a new adapter that
+// produces these same shapes, without changing any model or any code
+// outside src/server/services/bank/. Only the adapter
+// (src/server/services/bank/plaidClient.ts today) is allowed to import
+// the `plaid` package or reference Plaid-specific types.
+//
+// SECURITY: `accessTokenEncrypted` is the credential that lets Fable read
+// an account's transactions — encrypted at rest (src/lib/crypto.ts,
+// same AES-256-GCM primitive 2FA secrets use), NEVER sent to the client,
+// and only ever decrypted server-side, inside the adapter, for the
+// duration of a single provider API call.
+
+/// One connected bank/institution. A business can have several.
+model BankConnection {
+  id         String @id @default(cuid())
+  businessId String
+  provider   String @default("plaid") // only "plaid" exists today; the column exists so a future provider doesn't need a migration
+
+  providerItemId       String  @unique // Plaid's item_id — stable identity for this connection at the provider
+  accessTokenEncrypted String // NEVER exposed to the client; server-only; see src/lib/crypto.ts
+
+  institutionId   String?
+  institutionName String?
+
+  /// ACTIVE: syncing normally. ERROR: provider reports a problem (e.g.
+  /// expired consent, revoked access) — surfaced to the user with
+  /// errorCode, they need to reconnect. REVOKED: the user disconnected it
+  /// in Fable; kept (not deleted) so historical transactions/audit trail
+  /// survive a disconnect.
+  status    String  @default("ACTIVE")
+  errorCode String?
+
+  lastSyncedAt       DateTime?
+  transactionsCursor String? // Plaid's /transactions/sync cursor — enables incremental sync (Phase F); null means "never synced"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  accounts FinancialAccount[]
+
+  @@index([businessId])
+  @@map("bank_connections")
+}
+
+/// One account (checking, savings, credit card, ...) under a BankConnection.
+model FinancialAccount {
+  id               String @id @default(cuid())
+  businessId       String
+  bankConnectionId String
+
+  providerAccountId String @unique // Plaid's account_id
+
+  name   String
+  mask   String? // last 4 digits, for display ("Checking ...4321")
+  type   String // provider-native type ("depository", "credit", ...) — not a Fable enum, this is observed data
+  subtype String?
+
+  currentBalanceCents   Int?
+  availableBalanceCents Int?
+  isoCurrencyCode       String @default("USD")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  bankConnection BankConnection @relation(fields: [bankConnectionId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+
+  @@index([businessId])
+  @@index([bankConnectionId])
+  @@map("financial_accounts")
+}
+
+/// A synced bank transaction. Distinct from `Expense`/`Payment` (which
+/// are the business's OWN manually-entered or CSV-imported records) —
+/// Transaction is what the bank actually reports happened. Phase G
+/// (transaction intelligence) is what will eventually reconcile the two;
+/// this model does not auto-create Expense/Payment rows on its own.
+model Transaction {
+  id                 String @id @default(cuid())
+  businessId         String
+  financialAccountId String
+
+  /// Plaid's transaction_id — the stable identity that makes sync
+  /// idempotent. A sync that sees this ID again updates the existing row
+  /// (e.g. pending -> posted); it never inserts a duplicate.
+  providerTransactionId String @unique
+
+  /// Plaid's sign convention, kept as-is rather than flipped: POSITIVE =
+  /// money OUT (a purchase/debit), NEGATIVE = money IN (a
+  /// deposit/credit). Documented here because it's the opposite of how
+  /// Expense.amountCents (always positive) reads.
+  amountCents     Int
+  isoCurrencyCode String @default("USD")
+
+  postedDate     DateTime
+  authorizedDate DateTime?
+
+  merchantName String?
+  description  String // Plaid's raw "name" field
+
+  pending Boolean @default(false)
+
+  /// Fable's own normalized category (Phase G) — null until categorized.
+  /// Never set from providerCategory automatically without going through
+  /// that categorization logic.
+  category         String?
+  providerCategory String? // Plaid's raw category, kept for reference only — never authoritative
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  /// Soft-delete: Plaid can report a previously-synced (e.g. pending)
+  /// transaction as removed. Historical/audit integrity matters more
+  /// here than a clean list, so this is marked, not hard-deleted.
+  deletedAt DateTime?
+
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, postedDate])
+  @@index([financialAccountId])
+  @@map("transactions")
 }
 
 // ── Customers / Revenue side ───────────────────────────────────────────

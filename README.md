@@ -61,6 +61,9 @@ See `.env.example` for the full list with comments. The ones that matter:
 - `ENCRYPTION_KEY`, `RESEND_API_KEY` / `EMAIL_FROM` — see the comments in
   `.env.example`; both are optional for local dev (2FA and email sending
   degrade to honest fallback behavior without them, see "Security model").
+- `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` — free Sandbox
+  credentials from https://dashboard.plaid.com, no business verification
+  required. See "Bank connectivity" below.
 
 ## Scripts
 
@@ -327,6 +330,54 @@ Run `npm test` for (1)+(2), `npm run test:e2e` for (3). CI should run both
 before merge; neither currently runs in a CI pipeline because none is
 configured yet (there's no `.github/workflows` in this repo) — that's a
 real gap, not a hidden assumption.
+
+## Bank connectivity (Phase E)
+
+Real, not a prototype — connected against Plaid's actual Sandbox API
+(`tests/bank-connections.test.ts` runs 7 tests against it using
+`sandboxPublicTokenCreate`, Plaid's own mechanism for automated testing
+without driving the Link UI). What's real vs. what's still ahead:
+
+**Real:** connecting an account (`/app/bank`, Plaid Link), storing the
+connection with its access token encrypted at rest
+(`accessTokenEncrypted`, AES-256-GCM — see `src/lib/crypto.ts`),
+fetching accounts and balances, incremental transaction sync via
+`transactions/sync` (idempotent — upserts by `providerTransactionId`,
+never inserts a duplicate, persists the sync cursor after every page so
+a crash resumes rather than reprocessing), and disconnecting (best-effort
+provider-side revoke, then marked `REVOKED` locally — historical
+transactions/accounts are kept, not deleted).
+
+**Provider abstraction:** `src/server/services/bank/plaidClient.ts` is
+the ONLY file allowed to import the `plaid` package or reference
+Plaid-specific types. Everything else — `connections.ts`, the server
+actions, the UI — talks in provider-agnostic shapes
+(`BankConnection`/`FinancialAccount`/`Transaction`, see the comment
+above `BankConnection` in `schema.prisma`). Adding a second provider
+(Flinks, etc.) means writing a new adapter file that produces the same
+shapes, not touching anything downstream.
+
+**Not built yet:** Phase F's fuller automatic-sync story (scheduled/
+webhook-driven background sync — right now sync is either the initial
+sync right after connecting, or a manual "Sync now" click; there's no
+cron/webhook triggering it on its own yet), Phase G's transaction
+categorization and reconciliation against `Expense`/`Payment` (a synced
+`Transaction` is NOT currently turned into an `Expense` or matched to an
+invoice automatically — that's the next real piece of work, and the
+plan explicitly rules out silently guessing that link), and webhook
+signature verification (no webhook endpoint exists yet at all).
+
+**Environment:** `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` (see
+`.env.example`) — this environment runs against Sandbox, Plaid's free
+tier with fake test institutions and no business verification required.
+Moving to Production (real banks, real user data) is a separate Plaid
+application/approval step, not a code change.
+
+**Content-Security-Policy note:** `next.config.mjs`'s CSP allowlists
+`cdn.plaid.com` (script + frame) and Plaid's API hosts (connect-src),
+per Plaid's own documented CSP requirements
+(https://plaid.com/docs/link/web/) — Link is a third-party embedded
+widget and won't load without these.
 
 ## Deployment
 
