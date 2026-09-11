@@ -28,8 +28,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // swap to "postgresql" + a real DATABASE_URL for staging/prod
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // pooled (transaction mode, 6543) — used by the app at runtime
+  directUrl = env("DIRECT_URL") // session mode (5432) — used for migrations, which need prepared-statement support the transaction pooler doesn't provide
 }
 
 // ── Identity ────────────────────────────────────────────────────────────

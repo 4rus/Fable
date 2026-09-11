@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { createTestBusiness, createTestCustomer } from "./helpers";
 import { createInvoice } from "@/server/services/invoices";
@@ -8,9 +8,13 @@ import {
   InvoiceNotSendableError,
 } from "@/server/services/invoiceEmail";
 
-// RESEND_API_KEY is deliberately unset in the test environment (tests/setup.ts)
-// — these tests exercise the honest "not configured" path, the same path a
-// fresh checkout of this repo hits before anyone adds a real API key.
+// Force the "not configured" path regardless of whether a real
+// RESEND_API_KEY happens to be set in the developer's .env — these tests
+// exercise the honest not-configured path, the same one a fresh checkout
+// of this repo hits before anyone adds a real API key. See tests/email.test.ts
+// for why vi.stubEnv (not just deleting it in tests/setup.ts) is needed.
+beforeEach(() => vi.stubEnv("RESEND_API_KEY", ""));
+afterEach(() => vi.unstubAllEnvs());
 
 async function createTestInvoice(customerEmail: string | null) {
   const business = await createTestBusiness();

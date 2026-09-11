@@ -18,7 +18,9 @@ invent a number or a conclusion of its own.
 
 - **Next.js 14→15 (App Router) + TypeScript** — server actions/route handlers
   are the only place mutations happen; no separate API layer.
-- **Prisma + SQLite (dev) / Postgres (prod)** — see "Database" below.
+- **Prisma + Postgres** (Supabase in this environment, via its Supavisor
+  pooler) — see "Database" below. Dev, staging, and prod all run the same
+  provider now; there is no SQLite fallback.
 - **Auth.js (NextAuth) v4, credentials + bcrypt, JWT sessions.**
 - **Zod** at every server-side input boundary.
 - **Tailwind**, Fraunces (serif, for anything the product "says") + Inter
@@ -32,8 +34,8 @@ No microservices, no queue, no separate API gateway. One deployable.
 
 ```bash
 npm install
-cp .env.example .env        # fill in NEXTAUTH_SECRET (see comment in the file)
-npm run db:migrate          # creates prisma/dev.db and applies migrations
+cp .env.example .env        # fill in a real Postgres project's details (see below)
+npm run db:migrate          # applies migrations to your DATABASE_URL/DIRECT_URL
 npm run db:seed             # wipes and reseeds a realistic demo business
 npm run dev
 ```
@@ -44,13 +46,21 @@ again afterward.
 
 ### Environment variables
 
-See `.env.example` for the full list with comments. The two that matter:
+See `.env.example` for the full list with comments. The ones that matter:
 
-- `DATABASE_URL` — `file:./dev.db` locally; a real `postgresql://...` URL in
-  any shared/production environment. The schema is written to work
-  identically on both (see "Database" below).
+- `DATABASE_URL` / `DIRECT_URL` — a Postgres project (this environment uses
+  Supabase). `DATABASE_URL` is the pooled connection the app queries at
+  runtime; `DIRECT_URL` is the session-mode connection migrations use. See
+  the comment in `.env.example` for exactly where to find both in
+  Supabase's dashboard (Connect -> ORM -> Prisma) — the direct
+  `db.<ref>.supabase.co` host is IPv6-only on new projects and won't be
+  reachable from an IPv4-only network; the pooler exists to work around
+  exactly that.
 - `NEXTAUTH_SECRET` — generate with `npx auth secret` or `openssl rand -base64 32`.
   Never commit this. Rotating it invalidates every existing session.
+- `ENCRYPTION_KEY`, `RESEND_API_KEY` / `EMAIL_FROM` — see the comments in
+  `.env.example`; both are optional for local dev (2FA and email sending
+  degrade to honest fallback behavior without them, see "Security model").
 
 ## Scripts
 
@@ -119,8 +129,10 @@ prisma/
 tests/
   *.test.ts                Vitest: money math, invoice/payment logic,
                             forecast determinism, tenant isolation, team
-                            management. Run against a throwaway SQLite file
-                            (tests/test.db), never your dev database.
+                            management. Run against an isolated "test"
+                            Postgres schema (same project, never your
+                            "public" dev data) — see "Testing" below for
+                            why, now that Postgres is the only provider.
 e2e/
   *.spec.ts                Playwright: full-stack critical user journeys
                             (signup through payment, plus attachment
@@ -267,28 +279,49 @@ a shortcut — it's honest about what it is, and nothing here can silently
 drift out of balance the way a half-implemented double-entry system could.
 
 Enum-shaped columns (`Invoice.status`, `Membership.role`, etc.) are plain
-`String` in the schema, not native Prisma enums — SQLite has no enum type,
-and we want the dev (SQLite) and prod (Postgres) schemas to stay
-identical. The allowed values live in `src/lib/types.ts` and are enforced
-by the Zod schemas at every write path — never write one of these columns
-with a raw string that didn't come through there.
+`String` in the schema rather than native Postgres/Prisma enums — this
+predates the Postgres migration (the schema used to also run on SQLite,
+which has no enum type) and was kept deliberately rather than switched
+now, since a real enum type is a more invasive migration than the value
+it adds here. The allowed values live in `src/lib/types.ts` and are
+enforced by the Zod schemas at every write path — never write one of
+these columns with a raw string that didn't come through there.
 
 ## Testing
 
 Three layers:
 
 1. **Unit** — pure logic with no I/O: `tests/money.test.ts`,
-   `tests/validation.test.ts`.
-2. **Integration** — service-layer logic against a real (throwaway)
-   database: invoices/payments, forecast determinism, insight generation,
-   team management, tenant isolation. This is most of the suite, and it's
-   where the financial-correctness and security guarantees are actually
-   proven (overpayment rejection, idempotency, cross-tenant access denial,
-   the "last owner can't be removed" invariant, etc).
+   `tests/validation.test.ts`, `tests/totp.test.ts`, `tests/crypto.test.ts`.
+2. **Integration** — service-layer logic against a real database:
+   invoices/payments, forecast determinism, insight generation, team
+   management, tenant isolation, 2FA, invoice email. This is most of the
+   suite, and it's where the financial-correctness and security
+   guarantees are actually proven (overpayment rejection, idempotency,
+   cross-tenant access denial, the "last owner can't be removed"
+   invariant, etc).
 3. **End-to-end** (`e2e/`) — Playwright driving a real browser against a
    real running server and real database, covering the critical user
    journeys: sign up → create a customer → create an invoice → record a
    payment → see it reflected as an insight on the dashboard.
+
+**Database isolation, now that Postgres is the only provider:** unit/
+integration tests run against a dedicated **`test` Postgres schema**, and
+E2E against a dedicated **`e2e` schema** — both live in the same Supabase
+project as real dev data (`public` schema) but are fully separate
+namespaces, dropped and recreated fresh at the start of every run
+(`tests/global-setup.ts`, `e2e/global-setup.ts`) so tests never touch or
+depend on real dev data. This replaces the previous "throwaway SQLite
+file" isolation — a single Prisma Client can only speak one provider, so
+once the real app moved to Postgres, tests had to as well; there's no way
+to keep SQLite for tests while Postgres runs everything else. The
+honest tradeoff: tests are now real network round-trips (tens of
+seconds slower overall than local SQLite was), which is why
+`playwright.config.ts` runs with a deliberately generous
+`expect: { timeout: 20_000 }` and a 120s overall test timeout — cold
+Next.js route compiles stacked on real Postgres latency can legitimately
+take longer than SQLite-era defaults assumed, and that's a real
+characteristic of this setup, not a flaky test to paper over.
 
 Run `npm test` for (1)+(2), `npm run test:e2e` for (3). CI should run both
 before merge; neither currently runs in a CI pipeline because none is
@@ -297,15 +330,19 @@ real gap, not a hidden assumption.
 
 ## Deployment
 
-Not yet deployed anywhere. To take this to a real environment:
+Not yet deployed to a public URL. What IS real: the database is a real
+Supabase Postgres project (via its Supavisor pooler — see "Environment
+variables" above), and dev/seed/tests/E2E already run against it. What's
+still needed to actually deploy the app itself:
 
-1. Provision a Postgres database and set `DATABASE_URL` to it — the schema
-   requires no changes (see "Database" above).
-2. Set a strong, unique `NEXTAUTH_SECRET` and the real `NEXTAUTH_URL` in
-   the hosting environment.
-3. Run `npx prisma migrate deploy` (not `migrate dev`) as part of your
+1. Pick a hosting target for the Next.js app (Vercel is the obvious fit)
+   and set `DATABASE_URL` / `DIRECT_URL` / `NEXTAUTH_SECRET` /
+   `NEXTAUTH_URL` (and `ENCRYPTION_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`)
+   there — no schema changes needed, this environment's `.env` values
+   already point at the real target database.
+2. Run `npx prisma migrate deploy` (not `migrate dev`) as part of your
    deploy step.
-4. Put file uploads (see `src/server/services/attachments.ts`) on real
+3. Put file uploads (see `src/server/services/attachments.ts`) on real
    object storage (S3-compatible) with private ACLs instead of local
    disk — the current implementation stores locally under `uploads/`,
    which does **not** survive a redeploy on most hosts and does not
