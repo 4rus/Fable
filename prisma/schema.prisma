@@ -53,9 +53,9 @@ model User {
   twoFactorEnabled         Boolean @default(false)
   twoFactorSecretEncrypted String?
 
-  memberships         Membership[]
-  auditLogs           AuditLog[]
-  passwordResetTokens PasswordResetToken[]
+  memberships          Membership[]
+  auditLogs            AuditLog[]
+  passwordResetTokens  PasswordResetToken[]
   twoFactorBackupCodes TwoFactorBackupCode[]
 
   @@map("users")
@@ -150,17 +150,18 @@ model Business {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  memberships     Membership[]
-  customers       Customer[]
-  categories      Category[]
-  invoices        Invoice[]
-  payments        Payment[]
-  expenses        Expense[]
-  attachments     Attachment[]
-  auditLogs        AuditLog[]
-  bankConnections  BankConnection[]
-  financialAccounts FinancialAccount[]
-  transactions     Transaction[]
+  memberships           Membership[]
+  customers             Customer[]
+  categories            Category[]
+  invoices              Invoice[]
+  payments              Payment[]
+  expenses              Expense[]
+  attachments           Attachment[]
+  auditLogs             AuditLog[]
+  bankConnections       BankConnection[]
+  financialAccounts     FinancialAccount[]
+  transactions          Transaction[]
+  merchantCategoryRules MerchantCategoryRule[]
 
   @@map("businesses")
 }
@@ -190,7 +191,7 @@ model BankConnection {
   businessId String
   provider   String @default("plaid") // only "plaid" exists today; the column exists so a future provider doesn't need a migration
 
-  providerItemId       String  @unique // Plaid's item_id — stable identity for this connection at the provider
+  providerItemId       String @unique // Plaid's item_id — stable identity for this connection at the provider
   accessTokenEncrypted String // NEVER exposed to the client; server-only; see src/lib/crypto.ts
 
   institutionId   String?
@@ -225,9 +226,9 @@ model FinancialAccount {
 
   providerAccountId String @unique // Plaid's account_id
 
-  name   String
-  mask   String? // last 4 digits, for display ("Checking ...4321")
-  type   String // provider-native type ("depository", "credit", ...) — not a Fable enum, this is observed data
+  name    String
+  mask    String? // last 4 digits, for display ("Checking ...4321")
+  type    String // provider-native type ("depository", "credit", ...) — not a Fable enum, this is observed data
   subtype String?
 
   currentBalanceCents   Int?
@@ -276,11 +277,24 @@ model Transaction {
 
   pending Boolean @default(false)
 
-  /// Fable's own normalized category (Phase G) — null until categorized.
-  /// Never set from providerCategory automatically without going through
-  /// that categorization logic.
-  category         String?
+  /// Fable's own category assignment (Phase G) — null until categorized.
+  /// Set ONLY in two ways: (1) a high-confidence match against this
+  /// business's own MerchantCategoryRule (categorySource="merchant_rule"),
+  /// applied automatically at sync time, or (2) the user picking a
+  /// category by hand (categorySource="manual"). A generic keyword-based
+  /// guess is NEVER written here — it's surfaced as a live suggestion in
+  /// the review UI and only becomes real once the user confirms it (at
+  /// which point it's a "manual" pick and gets learned as a rule). Never
+  /// set from providerCategory automatically.
+  categoryId       String?
+  categorySource   String? // "merchant_rule" | "manual" — how categoryId got set; null iff categoryId is null
   providerCategory String? // Plaid's raw category, kept for reference only — never authoritative
+
+  /// User explicitly said "not a business expense" / "this is a transfer,
+  /// not real income or spend" — excluded from the review queue and never
+  /// reconciled into an Expense/Payment. Distinct from deletedAt (which
+  /// means the bank itself retracted the transaction).
+  ignoredAt DateTime?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -291,10 +305,45 @@ model Transaction {
 
   business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   financialAccount FinancialAccount @relation(fields: [financialAccountId], references: [id], onDelete: Cascade)
+  category         Category?        @relation(fields: [categoryId], references: [id])
+
+  /// Back-relations for the reconciliation link — the FK actually lives on
+  /// Expense.transactionId / Payment.transactionId (each @unique), which is
+  /// what makes "reconcile the same transaction twice" a DB-level
+  /// impossibility rather than an application-level promise.
+  expense Expense?
+  payment Payment?
 
   @@index([businessId, postedDate])
   @@index([financialAccountId])
+  @@index([categoryId])
   @@map("transactions")
+}
+
+/// A learned merchant -> category mapping, scoped to one business. Created
+/// the moment a user categorizes a Transaction (by hand, or by confirming
+/// a suggested category) — see setTransactionCategory() in
+/// src/server/services/bank/categorization.ts. This is the ONLY thing that
+/// counts as "high confidence" for auto-categorization at sync time; a
+/// generic keyword match never writes one of these and never
+/// auto-applies. `merchantKey` is a normalized (lowercased, de-noised)
+/// form of the transaction's merchant name/description, not the raw
+/// string — see normalizeMerchantKey().
+model MerchantCategoryRule {
+  id          String @id @default(cuid())
+  businessId  String
+  merchantKey String
+  categoryId  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, merchantKey])
+  @@index([businessId])
+  @@map("merchant_category_rules")
 }
 
 // ── Customers / Revenue side ───────────────────────────────────────────
@@ -385,8 +434,16 @@ model Payment {
   /// payment attempt.
   idempotencyKey String? @unique
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  invoice  Invoice  @relation(fields: [invoiceId], references: [id])
+  /// Set when this Payment was created by confirming a matched bank
+  /// Transaction (Phase G), rather than entered by hand. @unique makes
+  /// "reconcile the same deposit twice" a constraint violation, not just an
+  /// application-level promise — see confirmInvoicePayment() in
+  /// src/server/services/bank/reconciliation.ts.
+  transactionId String? @unique
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([businessId])
   @@index([invoiceId])
@@ -403,8 +460,10 @@ model Category {
   isSystem   Boolean  @default(false) // seeded default categories vs. user-created
   createdAt  DateTime @default(now())
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  expenses Expense[]
+  business      Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses      Expense[]
+  transactions  Transaction[]
+  merchantRules MerchantCategoryRule[]
 
   @@unique([businessId, name, type])
   @@map("categories")
@@ -423,9 +482,18 @@ model Expense {
   updatedAt   DateTime  @updatedAt
   deletedAt   DateTime?
 
+  /// Set when this Expense was created by confirming a synced bank
+  /// Transaction (Phase G), rather than entered by hand or via CSV import.
+  /// @unique makes "reconcile the same transaction twice" a constraint
+  /// violation, not just an application-level promise — see
+  /// confirmExpenseFromTransaction() in
+  /// src/server/services/bank/reconciliation.ts.
+  transactionId String? @unique
+
   business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category    Category     @relation(fields: [categoryId], references: [id])
   attachments Attachment[]
+  transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([businessId, incurredAt])
   @@map("expenses")

@@ -1,18 +1,27 @@
+import { prisma } from "@/lib/db";
 import { requireMembership } from "@/server/tenant";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { listBankConnections, listRecentTransactions } from "@/server/services/bank/connections";
+import { listTransactionsNeedingReview } from "@/server/services/bank/reconciliation";
 import ConnectBankButton from "./ConnectBankButton";
 import ConnectionCard from "./ConnectionCard";
 import RecentTransactions from "./RecentTransactions";
+import TransactionReview from "./TransactionReview";
 
 export default async function BankPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
   const business = maybeBusiness!;
   await requireMembership(business.id);
 
-  const [connections, transactions] = await Promise.all([
+  const [connections, transactions, reviewItems, expenseCategories] = await Promise.all([
     listBankConnections(business.id),
     listRecentTransactions(business.id),
+    listTransactionsNeedingReview(business.id),
+    prisma.category.findMany({
+      where: { businessId: business.id, type: "EXPENSE" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
   const hasAnyAccounts = connections.some((c) => c.accounts.length > 0);
 
@@ -49,6 +58,8 @@ export default async function BankPage() {
           Connected, but no accounts synced yet — this can take a moment on the first sync.
         </p>
       )}
+
+      <TransactionReview businessId={business.id} items={reviewItems} categories={expenseCategories} />
 
       <RecentTransactions transactions={transactions} />
 
