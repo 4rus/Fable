@@ -1,15 +1,19 @@
 import { requireMembership } from "@/server/tenant";
 import { getActiveBusinessContext } from "@/server/services/businesses";
-import { listBankConnections } from "@/server/services/bank/connections";
+import { listBankConnections, listRecentTransactions } from "@/server/services/bank/connections";
 import ConnectBankButton from "./ConnectBankButton";
 import ConnectionCard from "./ConnectionCard";
+import RecentTransactions from "./RecentTransactions";
 
 export default async function BankPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
   const business = maybeBusiness!;
   await requireMembership(business.id);
 
-  const connections = await listBankConnections(business.id);
+  const [connections, transactions] = await Promise.all([
+    listBankConnections(business.id),
+    listRecentTransactions(business.id),
+  ]);
   const hasAnyAccounts = connections.some((c) => c.accounts.length > 0);
 
   return (
@@ -45,6 +49,8 @@ export default async function BankPage() {
           Connected, but no accounts synced yet — this can take a moment on the first sync.
         </p>
       )}
+
+      <RecentTransactions transactions={transactions} />
 
       <p className="text-xs text-muted">
         Fable never sees or stores your bank password. Access can be revoked at any time by
