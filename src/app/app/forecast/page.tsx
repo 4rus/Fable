@@ -1,5 +1,6 @@
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { computeForecast, getCurrentCashCents, getUpcomingReceivables } from "@/server/services/forecast";
+import { narrateForecast } from "@/server/services/narration";
 import { formatCentsCompact, formatCentsDelta } from "@/lib/money";
 
 export default async function ForecastPage() {
@@ -13,6 +14,11 @@ export default async function ForecastPage() {
     computeForecast(business.id, 90),
     getUpcomingReceivables(business.id, 90),
   ]);
+  // Friendlier prose over the 90-day forecast's own numbers — never a
+  // second opinion on them. Falls back to a plain deterministic sentence
+  // built from the same numbers if narration isn't available. See
+  // src/server/services/narration.ts.
+  const narrated = await narrateForecast(business.id, f90, 90);
 
   const nodes = [
     { label: "Today", date: null as string | null, cents: currentCash, range: null as { lowCents: number; highCents: number } | null },
@@ -87,6 +93,8 @@ export default async function ForecastPage() {
           </p>
         </div>
       </section>
+
+      <p className="text-[15px] leading-relaxed text-ink">{narrated.summary}</p>
 
       {f90.topDrivers.length > 0 && (
         <section>

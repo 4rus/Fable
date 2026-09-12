@@ -10,9 +10,12 @@ See the Product Thesis discussed in project history: the differentiator is
 **interpretation, not automation**. Every insight the app shows is
 deterministic arithmetic over real rows in your database (see
 `src/server/services/insights.ts` and `forecast.ts`) — never an LLM guess.
-If an AI layer is added later, its only job is turning that structured,
-already-correct data into friendlier prose. It must never be allowed to
-invent a number or a conclusion of its own.
+An AI narration layer (Phase J, see "AI narration layer" below) exists on
+top of that, and its only job is turning that structured, already-correct
+data into friendlier prose. It is never allowed to invent a number or a
+conclusion of its own — every generated sentence is checked against the
+real numbers it was given, and falls back to the plain deterministic text
+on any doubt.
 
 ## Stack
 
@@ -437,6 +440,85 @@ code change.
 per Plaid's own documented CSP requirements
 (https://plaid.com/docs/link/web/) — Link is a third-party embedded
 widget and won't load without these.
+
+## AI narration layer (Phase J)
+
+Real, calling the actual Anthropic API — not mocked. `src/server/services/narration.ts`
+is the one place this happens; `src/lib/ai/anthropic.ts` is the thin,
+graceful-degradation seam around the API call itself (same pattern as
+`src/lib/email.ts`).
+
+**What it does and doesn't do.** The deterministic engines
+(`insights.ts`, `forecast.ts`) remain the only source of truth for every
+number and conclusion in the app — nothing about them changed for this
+phase. Narration takes their already-computed output (an `Insight`'s
+headline/explanation/why, or a forecast's projected range + top drivers)
+and asks Claude to reword it into warmer, second-person prose. It is
+never asked to analyze anything itself, and it never can add a new
+number or claim: **every response is independently checked after the
+fact** (`assertNoForeignNumbers`) — every digit sequence in the model's
+output must already appear in what it was given, or the whole response
+is discarded. Combined with a strict system prompt and `temperature: 0`,
+this is defense in depth, not just a polite instruction.
+
+**Graceful degradation, same as email/storage/Plaid.** Without
+`ANTHROPIC_API_KEY` set, every insight and the forecast page show their
+original plain deterministic text — which is already fully correct and
+readable on its own; narration is additive polish, never a dependency.
+The same fallback fires on any API error, malformed JSON, a missing
+field, or a failed number-safety check — there is no code path where a
+partial or unvalidated result reaches the page.
+
+**Caching.** One row per `(business, subject)` in the `Narration` table,
+keyed additionally by a hash of the exact facts narrated
+(`factsHash`) and a 24-hour freshness window. A normal page load is a
+cache hit (no LLM call); a changed underlying fact (new invoice, new
+expense) or a new day both force regeneration. Only successful,
+validated output is ever cached — a fallback is cheap to recompute live,
+and caching it would risk showing stale plain text for a day after a key
+is added or a transient API error clears up.
+
+**Model:** `claude-haiku-4-5-20251001` by default (override with
+`ANTHROPIC_MODEL`) — this task is constrained rewriting of already-correct
+text, not open-ended reasoning, so a small/fast/cheap model is the right
+fit. Get a key at https://console.anthropic.com (separate from a claude.ai
+subscription; pay-per-use, not free) — a few dollars of credit covers
+extensive use given how cheap and well-cached these calls are.
+
+**Testing:** `tests/narration.test.ts` covers the number-safety validator
+directly (pure logic, no I/O), the caching/regeneration logic with an
+injected fake LLM response (deterministic, no network — lets us test
+"invents a number → rejected", "cache hit → LLM not called again",
+"facts changed → regenerates", etc. without flaking on a real API), *and*
+a `describeIfConfigured` block (same convention as
+`bank-connections.test.ts`'s real Plaid Sandbox tests) that makes two
+real, live calls to the Anthropic API when `ANTHROPIC_API_KEY` is set —
+skipped with an honest message, never a false pass, otherwise. Manually
+verified end-to-end in a live browser against real seeded demo data: both
+the Overview page's five insights and the Forecast page's summary
+rendered genuine, distinct, warm prose with every number matching the
+underlying facts exactly, and a second page load served the cached
+version without a new API call (confirmed via server logs).
+
+**Real bug found and fixed during this phase:** the Anthropic client
+wrapper originally cached "is a key configured?" permanently at module
+scope after the first call, so a key added (or a test stubbing the env
+var) after that first check was silently ignored for the life of the
+process. Fixed by keying the cached client on the actual API key value,
+not just whether one had ever been seen — this is what let this phase's
+own tests catch it (fallback tests ran before the real-API tests in the
+same process and would otherwise have poisoned them).
+
+**Also fixed during this phase (infra, not app code):** the earlier
+`enable_rls` migration's `_prisma_migrations` RLS statement was silently
+breaking `prisma migrate dev`'s shadow-database validation for every
+migration created since — see the note added directly in
+`prisma/migrations/20260912201500_enable_rls/migration.sql` for the full
+root-cause writeup. This phase's own `ai_narration_cache` migration was
+authored by hand and applied with `prisma migrate deploy` (which doesn't
+need a shadow database) to work around it while developing, and the fix
+was verified by reproducing the shadow-db failure with/without that one
+line.
 
 ## Deployment
 

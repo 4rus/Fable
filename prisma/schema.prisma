@@ -162,8 +162,49 @@ model Business {
   financialAccounts     FinancialAccount[]
   transactions          Transaction[]
   merchantCategoryRules MerchantCategoryRule[]
+  narrations            Narration[]
 
   @@map("businesses")
+}
+
+// ── AI narration layer (Phase J) ────────────────────────────────────────
+//
+// GROUNDING: this table caches PROSE ONLY — never a number, conclusion, or
+// fact the LLM invented itself. Every row's `fields` is a rewrite of text
+// that `src/server/services/insights.ts` / `forecast.ts` already computed
+// deterministically; `factsHash` pins that rewrite to the exact facts it
+// was generated from, so if the underlying numbers change (new invoice,
+// new expense, etc.) the cache is invalidated and regenerated rather than
+// showing stale narration next to fresh numbers. See
+// src/server/services/narration.ts for the generation + validation logic
+// (every number in the LLM's output must already appear in its input, or
+// the result is thrown away and the caller falls back to the original
+// deterministic text).
+model Narration {
+  id         String @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// What this narration is for, e.g. "insight:overdue-invoices" or
+  /// "forecast:90". One cached row per (business, subject).
+  subjectKey String
+
+  /// SHA-256 of the canonical JSON of the facts fed to the LLM. A cache
+  /// hit requires this to match the facts being narrated right now.
+  factsHash String
+
+  /// The rewritten field(s) — shape depends on subjectKey's kind (an
+  /// insight has headline/explanation/why; a forecast has a single
+  /// summary paragraph). Never trusted as a source of new facts, only
+  /// ever rendered as prose alongside the real numbers.
+  fields Json
+
+  model       String   @default("")
+  generatedAt DateTime @default(now())
+
+  @@unique([businessId, subjectKey])
+  @@index([businessId])
+  @@map("narrations")
 }
 
 // ── Bank connectivity (Phase E) ─────────────────────────────────────────

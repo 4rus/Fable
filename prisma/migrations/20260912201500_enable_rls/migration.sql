@@ -47,6 +47,21 @@ ALTER TABLE "public"."expenses" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."attachments" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 
--- Prisma's own internal migration-history table -- same reasoning: no
--- reason for it to be reachable via the API either.
-ALTER TABLE "public"."_prisma_migrations" ENABLE ROW LEVEL SECURITY;
+-- NOTE (added 2026-09-12, during Phase J): this file originally also ran
+-- `ALTER TABLE "public"."_prisma_migrations" ENABLE ROW LEVEL SECURITY;`
+-- here. That statement was REMOVED from this historical file (though it
+-- did already run against the real dev database, which still has RLS
+-- enabled on _prisma_migrations today — editing this file does not
+-- undo that) because it broke `prisma migrate dev`'s shadow-database
+-- replay for every migration created afterward: Prisma's migration
+-- engine reads/writes its own bookkeeping table during shadow-db
+-- validation, and once RLS was enabled on it (even zero-policy ENABLE,
+-- which does not restrict the table owner on the REAL database), the
+-- shadow database's throwaway instance of that same table stopped being
+-- queryable by the engine mid-replay, failing with
+-- "P3006 / P1014: The underlying table for model
+-- `public._prisma_migrations` does not exist." Root-caused and
+-- confirmed by reproducing with/without this line during Phase J.
+-- `_prisma_migrations` is Prisma's own tooling table, not part of this
+-- app's data model, so leaving RLS off it in future fresh environments
+-- is an acceptable trade for keeping `migrate dev` working.
