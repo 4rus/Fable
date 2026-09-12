@@ -64,6 +64,9 @@ See `.env.example` for the full list with comments. The ones that matter:
 - `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` — free Sandbox
   credentials from https://dashboard.plaid.com, no business verification
   required. See "Bank connectivity" below.
+- `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` — optional; without them,
+  attachment uploads use local disk (fine for dev, not for production —
+  see "Deployment"). See the comments in `.env.example`.
 
 ## Scripts
 
@@ -141,8 +144,12 @@ e2e/
                             (signup through payment, plus attachment
                             upload/download and CSV import) against a
                             real running server + real database.
-uploads/                   Local dev storage for attachment files (see
-                           "Deployment" — not production-viable as-is).
+uploads/                   Local disk storage backend for attachment
+                           files (src/server/services/storage/) — the
+                           dev default; switches to real Supabase
+                           Storage automatically once SUPABASE_URL /
+                           SUPABASE_SERVICE_ROLE_KEY are set. See
+                           "Deployment".
 ```
 
 ## Security model
@@ -393,13 +400,17 @@ still needed to actually deploy the app itself:
    already point at the real target database.
 2. Run `npx prisma migrate deploy` (not `migrate dev`) as part of your
    deploy step.
-3. Put file uploads (see `src/server/services/attachments.ts`) on real
-   object storage (S3-compatible) with private ACLs instead of local
-   disk — the current implementation stores locally under `uploads/`,
-   which does **not** survive a redeploy on most hosts and does not
-   scale past one instance. This is flagged in code as a
-   `// TODO(production)` — do not ship this to a multi-instance host
-   without fixing it first.
-5. Add a real error-tracking/observability tool (Sentry or equivalent) —
+3. **Done, needs credentials:** file uploads
+   (`src/server/services/attachments.ts`) go through a provider-agnostic
+   storage layer (`src/server/services/storage/`) with two real backends
+   — local disk (`localDisk.ts`, the dev default, same isolation risk as
+   before: doesn't survive a redeploy or scale past one instance) and
+   Supabase Storage (`supabaseStorage.ts`, a private bucket, created
+   automatically on first upload). Set `SUPABASE_URL` and
+   `SUPABASE_SERVICE_ROLE_KEY` to switch new uploads to the real backend
+   — no other code change needed. Each `Attachment` row records which
+   backend it actually landed on (`provider` column), so flipping this on
+   never breaks reading/deleting files uploaded before it was set.
+4. Add a real error-tracking/observability tool (Sentry or equivalent) —
    `src/lib/logger.ts` has a single seam (`logError`) where that plugs in;
    right now it only writes structured JSON to stdout.

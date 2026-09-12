@@ -87,6 +87,9 @@ describe("uploadAttachment", () => {
 
     expect(attachment.mimeType).toBe("image/jpeg");
     expect(attachment.sizeBytes).toBe(JPEG_BYTES.byteLength);
+    // Local disk is the dev-default backend absent Supabase Storage
+    // config — see src/server/services/storage/index.ts.
+    expect(attachment.provider).toBe("local");
 
     const { buffer, mimeType } = await getAttachmentForDownload(business.id, attachment.id);
     expect(mimeType).toBe("image/jpeg");

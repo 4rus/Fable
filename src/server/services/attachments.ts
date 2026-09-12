@@ -1,7 +1,5 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { prisma } from "@/lib/db";
 import { logError } from "@/lib/logger";
 import { ForbiddenError } from "@/server/tenant";
@@ -11,6 +9,7 @@ import {
   sanitizeFilename,
   type AllowedAttachmentType,
 } from "@/lib/validation/attachments";
+import { writeFile, readFile, deleteFile, currentStorageProvider, type StorageProvider } from "@/server/services/storage";
 
 export class InvalidFileError extends Error {
   constructor(message: string) {
@@ -18,12 +17,6 @@ export class InvalidFileError extends Error {
     this.name = "InvalidFileError";
   }
 }
-
-// TODO(production): local disk does not survive a redeploy and does not
-// work past a single server instance. Swap UPLOAD_ROOT for an S3-
-// compatible object store with private ACLs before deploying anywhere
-// that isn't a single long-lived instance — see README "Deployment".
-const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 
 const EXTENSION_BY_TYPE: Record<AllowedAttachmentType, string> = {
   "image/jpeg": "jpg",
@@ -71,9 +64,13 @@ export async function uploadAttachment(params: {
   if (!expense) throw new ForbiddenError("Expense not found for this business");
 
   const storageKey = `${params.businessId}/${randomUUID()}.${EXTENSION_BY_TYPE[detectedType]}`;
-  const absolutePath = path.join(UPLOAD_ROOT, storageKey);
-  await mkdir(path.dirname(absolutePath), { recursive: true });
-  await writeFile(absolutePath, params.buffer);
+  // Decided once, at upload time, from current environment config — see
+  // src/server/services/storage/index.ts. Recorded on the row below so
+  // this exact file is always read/deleted through the backend it's
+  // actually sitting on, regardless of what the app's active provider is
+  // by the time someone downloads or deletes it.
+  const provider = currentStorageProvider();
+  await writeFile(provider, storageKey, params.buffer, detectedType);
 
   try {
     return await prisma.attachment.create({
@@ -82,15 +79,16 @@ export async function uploadAttachment(params: {
         expenseId: params.expenseId,
         filename: sanitizeFilename(params.filename),
         storageKey,
+        provider,
         mimeType: detectedType,
         sizeBytes: params.buffer.byteLength,
         uploadedByUserId: params.uploadedByUserId,
       },
     });
   } catch (err) {
-    // Roll back the file write so a failed DB insert doesn't leave an
-    // orphan we can never clean up through the app itself.
-    await unlink(absolutePath).catch(() => {});
+    // Roll back the write so a failed DB insert doesn't leave an orphan
+    // we can never clean up through the app itself.
+    await deleteFile(provider, storageKey).catch(() => {});
     throw err;
   }
 }
@@ -105,12 +103,15 @@ export async function getAttachmentForDownload(businessId: string, attachmentId:
   });
   if (!attachment) throw new ForbiddenError("Attachment not found for this business");
 
-  const absolutePath = path.join(UPLOAD_ROOT, attachment.storageKey);
   let buffer: Buffer;
   try {
-    buffer = await readFile(absolutePath);
+    buffer = await readFile(attachment.provider as StorageProvider, attachment.storageKey);
   } catch (err) {
-    logError("attachment file missing on disk", err, { attachmentId, storageKey: attachment.storageKey });
+    logError("attachment file missing from storage", err, {
+      attachmentId,
+      provider: attachment.provider,
+      storageKey: attachment.storageKey,
+    });
     throw new InvalidFileError("This file is no longer available.");
   }
 
@@ -124,7 +125,7 @@ export async function deleteAttachment(businessId: string, attachmentId: string)
   if (!attachment) return; // already gone; deletion is idempotent
 
   await prisma.attachment.delete({ where: { id: attachment.id } });
-  await unlink(path.join(UPLOAD_ROOT, attachment.storageKey)).catch(() => {});
+  await deleteFile(attachment.provider as StorageProvider, attachment.storageKey).catch(() => {});
 }
 
 export async function listAttachmentsForExpense(businessId: string, expenseId: string) {
