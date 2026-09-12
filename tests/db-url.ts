@@ -21,6 +21,16 @@ export function schemaScopedUrl(schema: string): string {
   }
   const url = new URL(base);
   url.searchParams.set("schema", schema);
+  // Supabase's session-mode pooler (what DIRECT_URL points at) caps the
+  // WHOLE PROJECT at 15 concurrent connections. Prisma's own default
+  // per-client pool size (roughly 2x the machine's CPU count) is sized for
+  // a single long-running server, not for Vitest's several parallel
+  // worker threads each opening their own PrismaClient — left at the
+  // default, that combination alone can exceed the cap before any test
+  // even runs a query. Each test file only ever needs a couple of
+  // connections at once (mirrored by vitest.config.ts's maxThreads,
+  // which bounds how many clients exist simultaneously).
+  url.searchParams.set("connection_limit", "3");
   return url.toString();
 }
 
