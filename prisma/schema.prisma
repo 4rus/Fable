@@ -343,6 +343,7 @@ model MerchantCategoryRule {
 
   @@unique([businessId, merchantKey])
   @@index([businessId])
+  @@index([categoryId])
   @@map("merchant_category_rules")
 }
 
@@ -406,6 +407,7 @@ model Invoice {
   @@unique([businessId, number])
   @@index([businessId, status])
   @@index([businessId, dueDate])
+  @@index([customerId])
   @@map("invoices")
 }
 
@@ -504,6 +506,7 @@ model Expense {
   transaction Transaction? @relation(fields: [transactionId], references: [id])
 
   @@index([businessId, incurredAt])
+  @@index([categoryId])
   @@map("expenses")
 }
 
@@ -557,5 +560,6 @@ model AuditLog {
   user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt])
+  @@index([userId])
   @@map("audit_logs")
 }

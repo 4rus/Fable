@@ -168,6 +168,23 @@ you?" `requireMembership()` / `requireOwner()` answer "are you allowed to
 touch this specific business?" They are separate calls on purpose —
 never assume a valid session implies access to a specific resource.
 
+**Row Level Security (defense in depth against a different attack
+surface).** Tenant isolation above is enforced once, in the application
+layer — this app never relies on Postgres RLS for it, and there are no
+per-tenant RLS policies to keep in sync with `tenant.ts`. But Supabase
+auto-exposes every table in the `public` schema through its own
+PostgREST/GraphQL/Realtime API using the `anon`/`authenticated` Postgres
+roles, independent of whether an app is written to use that API — this
+app isn't (Prisma connects directly over `DATABASE_URL`/`DIRECT_URL` as
+the table-owning role), but leaving RLS off would still mean anyone who
+ever obtained this project's `anon` key could read or write every row in
+every table directly, bypassing this app's authorization entirely. Every
+table in `public` has `ROW LEVEL SECURITY` enabled with zero policies
+(see the `enable_rls` migration) — `ENABLE`, not `FORCE`, so the
+owning/Prisma role is completely unaffected (Postgres exempts a table's
+owner from RLS by default), while every other role gets zero rows and
+zero write access, full stop.
+
 **Money.** Integer cents only (`src/lib/money.ts`). Line item and invoice
 totals are always recomputed server-side from `quantity * unitPriceCents`
 — a client-sent total is never trusted. Payments carry a required
