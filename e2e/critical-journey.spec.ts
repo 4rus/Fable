@@ -48,8 +48,17 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // The login page does a client-side signIn() call, then a router push
     // on success — wait for the actual navigation rather than the default
     // (short) assertion poll, so a slow first-compile of /app doesn't read
-    // as a login failure.
-    await page.waitForURL(/\/app$/, { timeout: 15_000 });
+    // as a login failure. /app pulls in the whole insight + forecast
+    // engine (getAllInsights -> five-plus insight functions, several of
+    // which call computeForecast three times each) on top of Next dev's
+    // own on-demand compile of every module that route touches for the
+    // first time in this fresh server process — as that surface has
+    // grown, 15s (this test's original budget) started failing
+    // consistently rather than occasionally. 30s matches the headroom
+    // this suite already gives slower steps elsewhere (see
+    // playwright.config.ts's expect.timeout) without hiding an actual
+    // hang, which the overall 120s test timeout still catches.
+    await page.waitForURL(/\/app$/, { timeout: 30_000 });
     // The business name legitimately appears twice (sidebar switcher +
     // dashboard dateline) — assert on the dateline specifically.
     await expect(page.getByText(`${businessName} ·`)).toBeVisible();
@@ -112,8 +121,10 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // NOT /\/app\/invoices\/[a-z0-9]+$/ — "new" is itself all-lowercase and
     // matches that pattern, so waitForURL would resolve immediately against
     // the still-unsubmitted form instead of waiting for the real redirect.
-    // Invoice ids are cuids (25 chars); require a real one.
-    await page.waitForURL(/\/app\/invoices\/(?!new$)[a-z0-9]{20,}$/, { timeout: 15_000 });
+    // Invoice ids are cuids (25 chars); require a real one. 30s for the
+    // same reason as the /app wait above — this is /app/invoices/[id]'s
+    // own first cold compile in this fresh server process.
+    await page.waitForURL(/\/app\/invoices\/(?!new$)[a-z0-9]{20,}$/, { timeout: 30_000 });
     invoiceUrl = page.url();
     await expect(page.getByText("$200.00").first()).toBeVisible();
   });

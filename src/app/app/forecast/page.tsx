@@ -15,10 +15,10 @@ export default async function ForecastPage() {
   ]);
 
   const nodes = [
-    { label: "Today", date: null as string | null, cents: currentCash },
-    { label: "30 days", date: f30.targetDate, cents: f30.projectedCashCents },
-    { label: "60 days", date: f60.targetDate, cents: f60.projectedCashCents },
-    { label: "90 days", date: f90.targetDate, cents: f90.projectedCashCents },
+    { label: "Today", date: null as string | null, cents: currentCash, range: null as { lowCents: number; highCents: number } | null },
+    { label: "30 days", date: f30.targetDate, cents: f30.projectedCashCents, range: f30.range },
+    { label: "60 days", date: f60.targetDate, cents: f60.projectedCashCents, range: f60.range },
+    { label: "90 days", date: f90.targetDate, cents: f90.projectedCashCents, range: f90.range },
   ];
 
   const dipsNegative = nodes.some((n) => n.cents < 0);
@@ -53,6 +53,11 @@ export default async function ForecastPage() {
                     {new Date(node.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </p>
                 )}
+                {node.range && node.range.lowCents !== node.range.highCents && (
+                  <p className="mt-0.5 text-xs tabular-nums text-muted">
+                    {formatCentsCompact(node.range.lowCents)}–{formatCentsCompact(node.range.highCents)}
+                  </p>
+                )}
               </div>
               {i < nodes.length - 1 && (
                 <div className="mt-4 flex flex-1 items-center px-3">
@@ -82,6 +87,24 @@ export default async function ForecastPage() {
           </p>
         </div>
       </section>
+
+      {f90.topDrivers.length > 0 && (
+        <section>
+          <h2 className="mb-3 text-[13px] font-semibold text-ink">What&apos;s driving this (90d)</h2>
+          <ul className="divide-y divide-line rounded-xl border border-line">
+            {f90.topDrivers.map((d, i) => (
+              <li key={i} className="flex items-center justify-between px-5 py-3">
+                <span className="text-sm text-ink">{d.label}</span>
+                <span
+                  className={`text-sm font-medium tabular-nums ${d.direction === "in" ? "text-good" : "text-bad"}`}
+                >
+                  {formatCentsDelta(d.direction === "in" ? d.amountCents : -d.amountCents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <h2 className="mb-3 text-[13px] font-semibold text-ink">Expected invoice payments</h2>

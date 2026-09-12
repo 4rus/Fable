@@ -114,3 +114,96 @@ describe("computeForecast", () => {
     );
   });
 });
+
+describe("computeForecast: uncertainty range", () => {
+  it("with no data at all, low/high/point are all zero-ranged around current cash", async () => {
+    const business = await createTestBusiness();
+    const forecast = await computeForecast(business.id, 30);
+    expect(forecast.range.lowCents).toBe(forecast.currentCashCents);
+    expect(forecast.range.highCents).toBe(forecast.currentCashCents);
+  });
+
+  it("the point estimate always falls inside its own [low, high] range", async () => {
+    const business = await createTestBusiness();
+    const a = await createTestCustomer(business.id, "Proven Payer");
+    const b = await createTestCustomer(business.id, "Unknown Customer");
+
+    // Proven payer: perfect on-time history.
+    const history = await createInvoice({ businessId: business.id, customerId: a.id, issueDate: new Date(), dueDate: new Date(Date.now() + 86_400_000), taxCents: 0, lineItems: [{ description: "x", quantity: 1, unitPriceCents: 1000 }] });
+    await markInvoiceSent(business.id, history.id);
+    await recordPayment({ businessId: business.id, invoiceId: history.id, amountCents: 1000, method: "cash", paidAt: new Date(), idempotencyKey: "range-hist-1" });
+
+    const openA = await createInvoice({ businessId: business.id, customerId: a.id, issueDate: new Date(), dueDate: new Date(Date.now() + 86_400_000), taxCents: 0, lineItems: [{ description: "x", quantity: 1, unitPriceCents: 4000 }] });
+    await markInvoiceSent(business.id, openA.id);
+    const openB = await createInvoice({ businessId: business.id, customerId: b.id, issueDate: new Date(), dueDate: new Date(Date.now() + 86_400_000), taxCents: 0, lineItems: [{ description: "x", quantity: 1, unitPriceCents: 6000 }] });
+    await markInvoiceSent(business.id, openB.id);
+
+    const category = await prisma.category.create({ data: { businessId: business.id, name: "Rent", type: "EXPENSE" } });
+    // Recurring spend that varies month to month, so low/high genuinely differ.
+    for (const [monthsAgo, amountCents] of [[0, 200_000], [1, 100_000], [2, 150_000]] as const) {
+      const d = new Date();
+      d.setDate(d.getDate() - monthsAgo * 30);
+      await prisma.expense.create({ data: { businessId: business.id, categoryId: category.id, vendorName: "Landlord", amountCents, incurredAt: d, isRecurring: true } });
+    }
+
+    const forecast = await computeForecast(business.id, 30);
+    expect(forecast.range.lowCents).toBeLessThanOrEqual(forecast.projectedCashCents);
+    expect(forecast.range.highCents).toBeGreaterThanOrEqual(forecast.projectedCashCents);
+    expect(forecast.range.lowCents).toBeLessThan(forecast.range.highCents);
+  });
+
+  it("the pessimistic edge counts nothing from a customer with no payment history; the optimistic edge counts every open invoice in full", async () => {
+    const business = await createTestBusiness();
+    const unknown = await createTestCustomer(business.id, "Brand New Customer");
+    const invoice = await createInvoice({ businessId: business.id, customerId: unknown.id, issueDate: new Date(), dueDate: new Date(Date.now() + 86_400_000), taxCents: 0, lineItems: [{ description: "x", quantity: 1, unitPriceCents: 30_000 }] });
+    await markInvoiceSent(business.id, invoice.id);
+
+    const forecast = await computeForecast(business.id, 30);
+    // No recurring expenses on file, so the range is receivables-only here.
+    expect(forecast.range.lowCents).toBe(forecast.currentCashCents); // 0% credited
+    expect(forecast.range.highCents).toBe(forecast.currentCashCents + 30_000); // 100% credited
+  });
+});
+
+describe("computeForecast: topDrivers", () => {
+  it("lists real invoices and recurring vendors as drivers, sorted by impact, never fabricated", async () => {
+    const business = await createTestBusiness();
+    const customer = await createTestCustomer(business.id, "Big Client");
+    const invoice = await createInvoice({ businessId: business.id, customerId: customer.id, issueDate: new Date(), dueDate: new Date(Date.now() + 86_400_000), taxCents: 0, lineItems: [{ description: "x", quantity: 1, unitPriceCents: 50_000 }] });
+    await markInvoiceSent(business.id, invoice.id);
+
+    const category = await prisma.category.create({ data: { businessId: business.id, name: "Software", type: "EXPENSE" } });
+    for (let m = 0; m < 3; m++) {
+      const d = new Date();
+      d.setDate(d.getDate() - m * 30);
+      await prisma.expense.create({ data: { businessId: business.id, categoryId: category.id, vendorName: "Cloud Host", amountCents: 9_000, incurredAt: d, isRecurring: true } });
+    }
+
+    const forecast = await computeForecast(business.id, 30);
+    const labels = forecast.topDrivers.map((d) => d.label);
+    expect(labels.some((l) => l.includes(invoice.number))).toBe(true);
+    expect(labels).toContain("Cloud Host");
+
+    const invoiceDriver = forecast.topDrivers.find((d) => d.label.includes(invoice.number));
+    expect(invoiceDriver?.direction).toBe("in");
+    const vendorDriver = forecast.topDrivers.find((d) => d.label === "Cloud Host");
+    expect(vendorDriver?.direction).toBe("out");
+
+    // Sorted by magnitude, largest first.
+    for (let i = 1; i < forecast.topDrivers.length; i++) {
+      expect(forecast.topDrivers[i - 1]!.amountCents).toBeGreaterThanOrEqual(forecast.topDrivers[i]!.amountCents);
+    }
+  });
+
+  it("caps at 5 drivers even with more real contributors on file", async () => {
+    const business = await createTestBusiness();
+    const category = await prisma.category.create({ data: { businessId: business.id, name: "Supplies", type: "EXPENSE" } });
+    for (let i = 0; i < 8; i++) {
+      await prisma.expense.create({
+        data: { businessId: business.id, categoryId: category.id, vendorName: `Vendor ${i}`, amountCents: 1000 + i, incurredAt: new Date(), isRecurring: true },
+      });
+    }
+    const forecast = await computeForecast(business.id, 30);
+    expect(forecast.topDrivers.length).toBeLessThanOrEqual(5);
+  });
+});
