@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { getCurrentCashCents, computeForecast } from "@/server/services/forecast";
 import { getAllInsights, summarizeInsights } from "@/server/services/insights";
+import { narrateInsights } from "@/server/services/narration";
 import { formatCentsCompact } from "@/lib/money";
 import ThingsToDo from "@/components/ThingsToDo";
 
@@ -17,12 +18,16 @@ export default async function DashboardPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
   const business = maybeBusiness!;
 
-  const [cashCents, f30, f90, insights] = await Promise.all([
+  const [cashCents, f30, f90, rawInsights] = await Promise.all([
     getCurrentCashCents(business.id),
     computeForecast(business.id, 30),
     computeForecast(business.id, 90),
     getAllInsights(business.id),
   ]);
+  // Friendlier prose over the same facts — never the source of them. See
+  // src/server/services/narration.ts: falls back to the original
+  // deterministic text untouched on any doubt.
+  const insights = await narrateInsights(business.id, rawInsights);
 
   const { headline, spotlight, rest } = summarizeInsights(insights);
   // Only feature the spotlight as a contrastive "But..." sentence when it's
