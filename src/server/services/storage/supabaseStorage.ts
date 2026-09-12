@@ -64,6 +64,16 @@ export async function writeSupabase(storageKey: string, buffer: Buffer, contentT
   const { error } = await client.storage.from(BUCKET).upload(storageKey, buffer, {
     contentType,
     upsert: false, // storageKey always includes a fresh randomUUID() -- a collision would mean something is wrong, never silently overwrite
+    // Supabase Storage defaults to Cache-Control: max-age=3600, which a
+    // CDN edge can go on serving for up to an hour after the object is
+    // deleted -- confirmed directly against the real API while building
+    // this. Harmless for the app's own access path (every read goes
+    // through attachments.ts, which checks the Attachment DB row first
+    // and never even reaches here once that row is gone) but wrong for
+    // data this sensitive to leave cacheable anywhere outside our own
+    // control. Matches the no-cache header the download route already
+    // sets on the final response (src/app/api/attachments/[id]/route.ts).
+    cacheControl: "0",
   });
   if (error) throw error;
 }
