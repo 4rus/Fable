@@ -90,7 +90,7 @@ export default async function DashboardPage() {
             : `${thingsToDo.length} thing${thingsToDo.length === 1 ? "" : "s"} worth doing today`}
         </p>
         <div className="mt-5">
-          <ThingsToDo insights={thingsToDo} />
+          <ThingsToDo insights={thingsToDo} businessId={business.id} />
         </div>
       </div>
     </div>
