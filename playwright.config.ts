@@ -18,8 +18,14 @@ export default defineConfig({
   // Generous: this one test walks the entire critical path (signup ->
   // invoice -> payment -> attachment -> CSV import -> insight) against a
   // real Postgres connection, where SQLite's local-file latency doesn't
-  // apply.
-  timeout: 120_000,
+  // apply, PLUS Next dev's on-demand compile of every distinct route the
+  // journey touches for the first time in this fresh server process
+  // (each one only pays that cost once, but the journey visits many).
+  // 120s was enough early on; as the app has grown (more routes, a
+  // heavier insight/forecast engine on /app) it started running out
+  // consistently rather than occasionally — raised to keep pace, not
+  // because any single step actually hangs.
+  timeout: 240_000,
   // Postgres (Supabase) is a real network round-trip, on top of Next
   // dev's first-compile cost per route — both add real latency SQLite
   // never had. 20s comfortably covers a cold compile + a slow query

@@ -34,8 +34,30 @@ export interface ForecastBreakdown {
   expectedReceivablesCents: number;
   expectedExpensesCents: number;
   projectedCashCents: number;
+  /** A deterministic best/worst-case band around `projectedCashCents` —
+   * never a fabricated statistical confidence interval, just the two
+   * honest edges of what the same real data supports: every open
+   * invoice collecting in full (optimistic) vs. only customers with a
+   * proven on-time history collecting anything at all (pessimistic), and
+   * the lowest vs. highest of the last three 30-day recurring-spend
+   * totals actually on file. `projectedCashCents` always falls inside
+   * this range by construction — see computeForecast's comments. */
+  range: { lowCents: number; highCents: number };
   confidence: "low" | "medium" | "high";
   assumptions: string[];
+  /** The specific real rows behind the two totals above, sorted by
+   * impact — the "why", not just the "what". A receivable driver is one
+   * open invoice's expected contribution (remaining balance x that
+   * customer's own on-time rate); an expense driver is one recurring
+   * vendor's trailing monthly average. Never fabricated, never a
+   * category that doesn't map to real rows. */
+  topDrivers: ForecastDriver[];
+}
+
+export interface ForecastDriver {
+  direction: "in" | "out";
+  label: string;
+  amountCents: number;
 }
 
 export async function getCurrentCashCents(businessId: string): Promise<number> {
@@ -87,26 +109,43 @@ export async function computeForecast(
   // Per-customer historical on-time rate, from their fully-paid invoice
   // history: fraction of invoices whose last payment landed on/before
   // dueDate. Businesses with no history for a customer get a neutral 0.7
-  // default weight rather than assuming certainty — see `assumptions`.
+  // default weight for the point estimate rather than assuming certainty
+  // — see `assumptions`. The range's two edges don't use that neutral
+  // default at all: the pessimistic edge counts nothing from an unproven
+  // customer, the optimistic edge counts every open invoice in full.
   const paymentRateCache = new Map<string, number | null>();
+  const receivableDrivers: ForecastDriver[] = [];
 
   let expectedReceivablesCents = 0;
+  let receivablesLowCents = 0;
+  let receivablesHighCents = 0;
   for (const inv of openInvoices) {
     const remaining = subtractCents(inv.totalCents, amountPaidCents(inv));
     if (remaining <= 0) continue;
 
-    let rate = paymentRateCache.get(inv.customerId);
-    if (rate === undefined) {
-      rate = await customerOnTimeRate(businessId, inv.customerId);
-      paymentRateCache.set(inv.customerId, rate);
+    let rawRate = paymentRateCache.get(inv.customerId);
+    if (rawRate === undefined) {
+      rawRate = await customerOnTimeRate(businessId, inv.customerId);
+      paymentRateCache.set(inv.customerId, rawRate);
     }
-    if (rate === null) {
+
+    receivablesHighCents = addCents(receivablesHighCents, remaining);
+    receivablesLowCents = addCents(receivablesLowCents, Math.round(remaining * (rawRate ?? 0)));
+
+    let pointRate = rawRate;
+    if (pointRate === null) {
       assumptions.push(
         `${inv.customer.name} has no payment history — assumed a neutral 70% chance of collecting within this window.`,
       );
-      rate = 0.7;
+      pointRate = 0.7;
     }
-    expectedReceivablesCents += Math.round(remaining * rate);
+    const contributionCents = Math.round(remaining * pointRate);
+    expectedReceivablesCents = addCents(expectedReceivablesCents, contributionCents);
+    receivableDrivers.push({
+      direction: "in",
+      label: `${inv.customer.name} — ${inv.number}`,
+      amountCents: contributionCents,
+    });
   }
 
   // ── Expected recurring expenses ─────────────────────────────────────
@@ -118,23 +157,64 @@ export async function computeForecast(
       isRecurring: true,
       incurredAt: { gte: threeMonthsAgo },
     },
-    select: { amountCents: true, incurredAt: true },
+    select: { amountCents: true, incurredAt: true, vendorName: true },
   });
 
   let expectedExpensesCents: number;
+  let expensesLowCents: number;
+  let expensesHighCents: number;
+  const expenseDrivers: ForecastDriver[] = [];
+
   if (recurring.length === 0) {
     expectedExpensesCents = 0;
+    expensesLowCents = 0;
+    expensesHighCents = 0;
     assumptions.push(
       "No recurring expenses are on file yet, so this forecast does not project any future spending — it will understate cash going out. Log recurring costs (rent, subscriptions, insurance) for a realistic number.",
     );
   } else {
-    const monthlyAvg = addCents(...recurring.map((r) => r.amountCents)) / 3;
-    expectedExpensesCents = Math.round(monthlyAvg * (horizonDays / 30));
+    const horizonScale = horizonDays / 30;
+
+    // Three rolling 30-day buckets (not calendar months — the 90-day
+    // window itself is defined the same way) so the range has two real
+    // observed data points to anchor to, not just their average.
+    const buckets = [0, 0, 0];
+    for (const r of recurring) {
+      const daysAgo = (now.getTime() - r.incurredAt.getTime()) / (24 * 60 * 60 * 1000);
+      const bucket = Math.min(2, Math.floor(daysAgo / 30));
+      buckets[bucket] = addCents(buckets[bucket]!, r.amountCents);
+    }
+    const monthlyAvg = addCents(...buckets) / 3;
+    expectedExpensesCents = Math.round(monthlyAvg * horizonScale);
+    expensesLowCents = Math.round(Math.min(...buckets) * horizonScale);
+    expensesHighCents = Math.round(Math.max(...buckets) * horizonScale);
+
+    // Group by vendor for the driver list — one line per recurring cost,
+    // not one per historical row.
+    const byVendor = new Map<string, number>();
+    for (const r of recurring) {
+      byVendor.set(r.vendorName, addCents(byVendor.get(r.vendorName) ?? 0, r.amountCents));
+    }
+    for (const [vendorName, trailingTotalCents] of byVendor) {
+      const monthlyCents = trailingTotalCents / 3;
+      expenseDrivers.push({
+        direction: "out",
+        label: vendorName,
+        amountCents: Math.round(monthlyCents * horizonScale),
+      });
+    }
   }
 
   const projectedCashCents = Math.round(
     currentCashCents + expectedReceivablesCents - expectedExpensesCents,
   );
+  // By construction: receivablesLow <= expectedReceivables <= receivablesHigh
+  // (rawRate ?? 0 <= pointRate <= 1 for every invoice), and expensesLow <=
+  // expectedExpenses <= expensesHigh (monthlyAvg is the mean of the same
+  // three buckets min/max is drawn from) — so the point estimate always
+  // falls inside [lowCents, highCents], never outside its own range.
+  const lowCents = Math.round(currentCashCents + receivablesLowCents - expensesHighCents);
+  const highCents = Math.round(currentCashCents + receivablesHighCents - expensesLowCents);
 
   const confidence: ForecastBreakdown["confidence"] =
     openInvoices.length === 0 && recurring.length === 0
@@ -142,6 +222,11 @@ export async function computeForecast(
       : assumptions.length === 0
         ? "high"
         : "medium";
+
+  const topDrivers = [...receivableDrivers, ...expenseDrivers]
+    .filter((d) => d.amountCents > 0)
+    .sort((a, b) => b.amountCents - a.amountCents)
+    .slice(0, 5);
 
   return {
     asOfDate: now.toISOString(),
@@ -151,8 +236,10 @@ export async function computeForecast(
     expectedReceivablesCents,
     expectedExpensesCents,
     projectedCashCents,
+    range: { lowCents, highCents },
     confidence,
     assumptions,
+    topDrivers,
   };
 }
 
