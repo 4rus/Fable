@@ -64,6 +64,13 @@ export async function createLinkToken(clientUserId: string): Promise<string> {
     // not speculatively; each one changes which institutions Link shows.
     country_codes: [CountryCode.Us, CountryCode.Ca],
     language: "en",
+    // Registers the Item for real-time sync webhooks (Phase F) — only
+    // when a public URL is actually configured. Without it, Plaid never
+    // learns where to send webhooks and every connection made under
+    // this Link session stays exactly as manual-sync-only as it is
+    // today; this is an additive, opt-in registration, not a
+    // requirement for Link to work.
+    webhook: process.env.PLAID_WEBHOOK_URL || undefined,
   });
   return response.data.link_token;
 }
@@ -207,4 +214,26 @@ export async function syncTransactionsPage(accessToken: string, cursor: string |
 export async function removeItem(accessToken: string): Promise<void> {
   const client = getClient();
   await client.itemRemove({ access_token: accessToken });
+}
+
+export interface WebhookVerificationJwk {
+  alg: string;
+  crv: string;
+  kid: string;
+  kty: string;
+  use: string;
+  x: string;
+  y: string;
+}
+
+/** Fetches the public key Plaid signed a given webhook with, by the `kid`
+ * from that webhook's JWT header — see
+ * src/server/services/bank/webhookVerification.ts, the only caller. This
+ * is an outbound call WE make to Plaid (unlike the webhook delivery
+ * itself, which is inbound and needs a real public URL) — real and
+ * testable even without one. */
+export async function getWebhookVerificationKey(keyId: string): Promise<WebhookVerificationJwk> {
+  const client = getClient();
+  const response = await client.webhookVerificationKeyGet({ key_id: keyId });
+  return response.data.key;
 }

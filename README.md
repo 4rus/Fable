@@ -364,21 +364,56 @@ above `BankConnection` in `schema.prisma`). Adding a second provider
 (Flinks, etc.) means writing a new adapter file that produces the same
 shapes, not touching anything downstream.
 
-**Not built yet:** Phase F's fuller automatic-sync story (scheduled/
-webhook-driven background sync — right now sync is either the initial
-sync right after connecting, or a manual "Sync now" click; there's no
-cron/webhook triggering it on its own yet), Phase G's transaction
-categorization and reconciliation against `Expense`/`Payment` (a synced
-`Transaction` is NOT currently turned into an `Expense` or matched to an
-invoice automatically — that's the next real piece of work, and the
-plan explicitly rules out silently guessing that link), and webhook
-signature verification (no webhook endpoint exists yet at all).
+**Phase G (transaction categorization/reconciliation)** is also real and
+done: a synced `Transaction` gets deterministically categorized (a
+business's own learned merchant rules auto-apply; generic keyword
+matches are suggestions only, never silently applied) and can be
+reconciled into a real `Expense` or matched to an open invoice's
+`Payment` — always on explicit user confirmation, never automatically.
+See `src/server/services/bank/categorization.ts` and
+`reconciliation.ts`, and the "Needs attention" section on `/app/bank`.
 
-**Environment:** `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` (see
-`.env.example`) — this environment runs against Sandbox, Plaid's free
-tier with fake test institutions and no business verification required.
-Moving to Production (real banks, real user data) is a separate Plaid
-application/approval step, not a code change.
+**Phase F (real-time sync via webhooks)** is real and done:
+`src/app/api/webhooks/plaid/route.ts` receives Plaid's webhooks (mainly
+`TRANSACTIONS: SYNC_UPDATES_AVAILABLE`, which triggers the same
+`syncBankConnection()` a manual "Sync now" click does; also `ITEM:
+ERROR` and revocation-related codes, reflected in the connection's
+status) with real JWT signature verification
+(`src/server/services/bank/webhookVerification.ts` — ES256 signature,
+freshness check, and a SHA-256 body-hash check, all real cryptographic
+verification via `jose`, per
+[Plaid's webhook verification spec](https://plaid.com/docs/api/webhooks/webhook-verification/)).
+Manual "Sync now" still works exactly as before and remains the fallback
+when webhooks aren't configured.
+
+**Honest limit on how this was tested:** the signature-verification math
+itself is tested for real (valid/tampered/stale/wrong-key cases, using a
+locally generated ES256 keypair — see
+`tests/webhook-verification.test.ts`), and the dispatch logic is tested
+against real Plaid Sandbox connections
+(`tests/webhook-handler.test.ts`, `tests/webhook-route.test.ts` —
+including a fully signed, real end-to-end POST to the route). What
+hasn't been tested is Plaid *actually delivering* a webhook to this
+server, because that requires a real public URL and this environment
+only has `localhost` — the same category of gap as "not yet deployed"
+elsewhere in this doc. Set `PLAID_WEBHOOK_URL` to a real public URL once
+deployed to turn this on for real; without it, no webhook is registered
+with Plaid and nothing changes from today's manual-sync behavior.
+
+**Not built yet:** a reconnect flow for an errored/expiring connection
+(Plaid Link's "update mode") — an `ITEM: ERROR` webhook (or a stale
+`LOGIN_REPAIRED`/`PENDING_EXPIRATION`) is reflected in the connection's
+status, but there's no UI path yet to actually walk the user back
+through Link to fix it; today they'd need to disconnect and reconnect
+from scratch. Logged, not silently dropped — see
+`webhookHandler.ts`'s comments.
+
+**Environment:** `PLAID_CLIENT_ID` / `PLAID_SECRET` / `PLAID_ENV` / the
+optional `PLAID_WEBHOOK_URL` (see `.env.example`) — this environment
+runs against Sandbox, Plaid's free tier with fake test institutions and
+no business verification required. Moving to Production (real banks,
+real user data) is a separate Plaid application/approval step, not a
+code change.
 
 **Content-Security-Policy note:** `next.config.mjs`'s CSP allowlists
 `cdn.plaid.com` (script + frame) and Plaid's API hosts (connect-src),
