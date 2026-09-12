@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { prisma } from "@/lib/db";
 import { createTestBusiness } from "./helpers";
 import { sniffAttachmentType, sanitizeFilename } from "@/lib/validation/attachments";
@@ -9,6 +9,18 @@ import {
   InvalidFileError,
 } from "@/server/services/attachments";
 import { ForbiddenError } from "@/server/tenant";
+
+// This file specifically exercises the local-disk backend (the dev
+// default) regardless of whether the developer's real .env happens to
+// have Supabase Storage configured — same reasoning as
+// tests/invoice-email.test.ts forcing RESEND_API_KEY off. The
+// Supabase-backed path has its own dedicated real-API tests:
+// tests/storage-supabase.test.ts.
+beforeEach(() => {
+  vi.stubEnv("SUPABASE_URL", "");
+  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+});
+afterEach(() => vi.unstubAllEnvs());
 
 // Minimal valid file bytes for each accepted type — real magic-byte
 // prefixes, not full valid files (we don't need a renderable image for
@@ -87,6 +99,9 @@ describe("uploadAttachment", () => {
 
     expect(attachment.mimeType).toBe("image/jpeg");
     expect(attachment.sizeBytes).toBe(JPEG_BYTES.byteLength);
+    // Local disk is the dev-default backend absent Supabase Storage
+    // config — see src/server/services/storage/index.ts.
+    expect(attachment.provider).toBe("local");
 
     const { buffer, mimeType } = await getAttachmentForDownload(business.id, attachment.id);
     expect(mimeType).toBe("image/jpeg");

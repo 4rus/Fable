@@ -519,6 +519,13 @@ model Attachment {
   expenseId        String
   filename         String // original filename, sanitized before display — never used to build a filesystem path
   storageKey       String   @unique
+  /// Which storage backend actually holds the bytes at `storageKey` — see
+  /// src/server/services/storage/. Recorded PER ROW (not read from
+  /// current config) so switching the app's active backend (e.g. local
+  /// disk in dev -> Supabase Storage once configured) never breaks
+  /// reading/deleting a file that was uploaded under the old one. Same
+  /// reasoning as BankConnection.provider.
+  provider         String   @default("local") // "local" | "supabase"
   mimeType         String // sniffed from real file content, not the client's claimed Content-Type
   sizeBytes        Int
   uploadedByUserId String?
