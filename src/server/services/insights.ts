@@ -35,10 +35,18 @@ export interface Insight {
   why: string;
   /** A short basis statement for trust, e.g. "Based on 2 open invoices". */
   basis: string;
-  /** Optional call to action. */
+  /** Optional call to action — a navigation link. */
   action?: { label: string; href: string };
+  /** Optional one-click workflow the UI can run without leaving the page
+   * (Phase K) — a discriminated union so each insight that supports one
+   * carries exactly the data its action needs, nothing looked up again.
+   * Distinct from `action`: this performs a real side effect (e.g. sends
+   * an email) rather than navigating. */
+  quickAction?: InsightQuickAction;
   evidence: { type: string; id: string; label: string }[];
 }
+
+export type InsightQuickAction = { type: "send_invoice_reminder"; invoiceId: string; customerName: string };
 
 export async function getOverdueInvoicesInsight(businessId: string): Promise<Insight | null> {
   const openInvoices = await prisma.invoice.findMany({
@@ -62,6 +70,13 @@ export async function getOverdueInvoicesInsight(businessId: string): Promise<Ins
     why: "Collecting these would add meaningful cushion to your projected cash position.",
     basis: `Based on ${overdue.length} open invoice${overdue.length === 1 ? "" : "s"}`,
     action: { label: "Review invoices", href: "/app/invoices" },
+    // Only offered when the oldest overdue customer actually has an email
+    // on file — the reminder service itself is the single source of
+    // truth for every other eligibility/rate-limit rule, this just avoids
+    // showing a button that would immediately fail for a knowable reason.
+    quickAction: oldest.customer.email
+      ? { type: "send_invoice_reminder", invoiceId: oldest.id, customerName: oldest.customer.name }
+      : undefined,
     evidence: overdue.map((inv) => ({
       type: "invoice",
       id: inv.id,

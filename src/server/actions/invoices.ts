@@ -17,6 +17,11 @@ import {
   MissingCustomerEmailError,
   InvoiceNotSendableError,
 } from "@/server/services/invoiceEmail";
+import {
+  sendInvoiceReminderEmail,
+  ReminderNotSendableError,
+  ReminderRateLimitedError,
+} from "@/server/services/reminderEmail";
 import { ForbiddenError } from "@/server/tenant";
 
 export type ActionState = { error?: string };
@@ -103,6 +108,48 @@ export async function sendInvoiceEmailAction(
 
   revalidatePath(`/app/invoices/${invoiceId}`);
   revalidatePath("/app/invoices");
+  return { status: "sent" };
+}
+
+export type SendReminderActionState =
+  | { status: "idle" }
+  | { status: "sent" }
+  | { status: "not_configured" }
+  | { status: "error"; error: string };
+
+/** The "Send reminder" quick action — callable from the invoice detail
+ * page and directly from the overdue-invoices insight on the Overview
+ * page (see ThingsToDo.tsx). Real email, same as sendInvoiceEmailAction;
+ * see src/server/services/reminderEmail.ts for the actual guards
+ * (eligible status, real balance, rate limit). */
+export async function sendInvoiceReminderAction(
+  businessId: string,
+  invoiceId: string,
+): Promise<SendReminderActionState> {
+  const ctx = await requireMembership(businessId);
+
+  try {
+    const result = await sendInvoiceReminderEmail(ctx.businessId, invoiceId);
+    if (!result.delivered) {
+      if (result.reason === "not_configured") return { status: "not_configured" };
+      return { status: "error", error: "Could not send the reminder. Please try again." };
+    }
+  } catch (err) {
+    if (
+      err instanceof MissingCustomerEmailError ||
+      err instanceof ReminderNotSendableError ||
+      err instanceof ReminderRateLimitedError
+    ) {
+      return { status: "error", error: err.message };
+    }
+    if (err instanceof ForbiddenError) return { status: "error", error: err.message };
+    logError("sendInvoiceReminderEmail failed", err);
+    return { status: "error", error: "Could not send the reminder. Please try again." };
+  }
+
+  revalidatePath(`/app/invoices/${invoiceId}`);
+  revalidatePath("/app/invoices");
+  revalidatePath("/app");
   return { status: "sent" };
 }
 

@@ -390,6 +390,14 @@ model Invoice {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
+  /// When a payment-reminder email last went out for this invoice (Phase
+  /// K — see src/server/services/reminderEmail.ts). Distinct from
+  /// anything invoice-email-related: sending the invoice itself doesn't
+  /// touch this. Used only to rate-limit accidental repeat sends (a
+  /// double-click, an eager owner) — never to change status or any
+  /// financial fact.
+  lastReminderSentAt DateTime?
+
   business  Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   customer  Customer          @relation(fields: [customerId], references: [id])
   lineItems InvoiceLineItem[]

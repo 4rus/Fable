@@ -8,6 +8,7 @@ import { formatCents } from "@/lib/money";
 import StatusChip from "@/components/StatusChip";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SendInvoiceButton from "./SendInvoiceButton";
+import SendReminderButton from "./SendReminderButton";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -50,12 +51,26 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </div>
         </div>
         {invoice.status !== "VOID" && (
-          <SendInvoiceButton
-            businessId={business.id}
-            invoiceId={invoice.id}
-            customerHasEmail={!!invoice.customer.email}
-            alreadySent={invoice.status !== "DRAFT"}
-          />
+          <div className="flex flex-col items-end gap-2">
+            <SendInvoiceButton
+              businessId={business.id}
+              invoiceId={invoice.id}
+              customerHasEmail={!!invoice.customer.email}
+              alreadySent={invoice.status !== "DRAFT"}
+            />
+            {(invoice.status === "SENT" || invoice.status === "PARTIALLY_PAID") && due > 0 && (
+              <SendReminderButton
+                businessId={business.id}
+                invoiceId={invoice.id}
+                // Formatted here, server-side, into a plain string — never
+                // pass a raw Date into a client component to format with
+                // .toLocaleDateString() at render time: the server's
+                // locale and the browser's can format it differently,
+                // which is a hydration mismatch, not just a display quirk.
+                lastReminderSentAtLabel={invoice.lastReminderSentAt?.toLocaleDateString() ?? null}
+              />
+            )}
+          </div>
         )}
       </div>
 

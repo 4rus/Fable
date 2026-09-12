@@ -1,9 +1,17 @@
 import { prisma } from "@/lib/db";
 
 let counter = 0;
+/** `counter` is per-worker-process module state, not a global sequence —
+ * Vitest runs several test files in parallel worker threads (see
+ * vitest.config.ts), each with its own copy of this counter starting at
+ * 0. Two workers calling this in the same millisecond can otherwise
+ * produce the identical "timestamp-counter" suffix and collide on a
+ * unique constraint (email, business name, etc.) — a real, if rare,
+ * flake this surfaced once. The random component makes a same-millisecond
+ * collision astronomically unlikely regardless of how many workers run. */
 function uniqueSuffix() {
   counter += 1;
-  return `${Date.now()}-${counter}`;
+  return `${Date.now()}-${counter}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export async function createTestBusiness(name = "Test Business") {

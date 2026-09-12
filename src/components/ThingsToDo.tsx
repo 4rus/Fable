@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Insight } from "@/server/services/insights";
+import InsightQuickActionButton from "./InsightQuickActionButton";
 
 const markTone: Record<Insight["severity"], string> = {
   critical: "text-bad",
@@ -13,7 +14,7 @@ const markTone: Record<Insight["severity"], string> = {
  * container. This is meant to read as a short list a person wrote, not a
  * grid of alert widgets.
  */
-export default function ThingsToDo({ insights }: { insights: Insight[] }) {
+export default function ThingsToDo({ insights, businessId }: { insights: Insight[]; businessId: string }) {
   if (insights.length === 0) return null;
 
   return (
@@ -34,6 +35,11 @@ export default function ThingsToDo({ insights }: { insights: Insight[] }) {
               )}
               <span className="text-muted">{insight.basis}</span>
             </div>
+            {insight.quickAction && (
+              <div className="mt-2">
+                <InsightQuickActionButton businessId={businessId} quickAction={insight.quickAction} />
+              </div>
+            )}
           </div>
         </li>
       ))}
