@@ -198,29 +198,45 @@ export async function revokeMember(params: {
   membershipId: string;
   revokedByUserId: string;
 }) {
-  const membership = await prisma.membership.findFirst({
-    where: { id: params.membershipId, businessId: params.businessId, status: "ACTIVE" },
-  });
-  if (!membership) return; // already gone; revoking is idempotent
+  await prisma.$transaction(async (tx) => {
+    // Row lock BEFORE reading/counting owners (Phase P): the count-then-
+    // write shape below is the exact same anti-pattern that turned out to
+    // be a real, reproducible overpayment race in recordPayment
+    // (src/server/services/invoices.ts) — two owners revoking EACH OTHER
+    // at the same instant could otherwise both read "the other owner is
+    // still active" before either write commits, and both succeed,
+    // leaving zero active owners. A synthetic concurrent test for this
+    // exact scenario happened not to trigger the failure locally (see
+    // tests/team.test.ts — 5 consecutive clean runs), but that's a
+    // property of this run's timing, not a guarantee the code provides;
+    // fixed the same way regardless, since "THE CRITICAL GUARANTEE" (that
+    // test's own name) deserves a real one, not a lucky one. Locks every
+    // active owner row for this business — the only rows a concurrent
+    // revoke of another owner could contend on.
+    await tx.$queryRaw`SELECT id FROM "memberships" WHERE "businessId" = ${params.businessId} AND role = 'OWNER' AND status = 'ACTIVE' FOR UPDATE`;
 
-  if (membership.role === "OWNER") {
-    const otherActiveOwners = await prisma.membership.count({
-      where: {
-        businessId: params.businessId,
-        role: "OWNER",
-        status: "ACTIVE",
-        id: { not: membership.id },
-      },
+    const membership = await tx.membership.findFirst({
+      where: { id: params.membershipId, businessId: params.businessId, status: "ACTIVE" },
     });
-    if (otherActiveOwners === 0) throw new LastOwnerError();
-  }
+    if (!membership) return; // already gone; revoking is idempotent
 
-  await prisma.$transaction([
-    prisma.membership.update({
+    if (membership.role === "OWNER") {
+      const otherActiveOwners = await tx.membership.count({
+        where: {
+          businessId: params.businessId,
+          role: "OWNER",
+          status: "ACTIVE",
+          id: { not: membership.id },
+        },
+      });
+      if (otherActiveOwners === 0) throw new LastOwnerError();
+    }
+
+    await tx.membership.update({
       where: { id: membership.id },
       data: { status: "REVOKED", revokedAt: new Date() },
-    }),
-    prisma.auditLog.create({
+    });
+    await tx.auditLog.create({
       data: {
         businessId: params.businessId,
         userId: params.revokedByUserId,
@@ -228,6 +244,6 @@ export async function revokeMember(params: {
         entityType: "Membership",
         entityId: membership.id,
       },
-    }),
-  ]);
+    });
+  });
 }

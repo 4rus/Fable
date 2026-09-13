@@ -118,6 +118,54 @@ describe("payments", () => {
     ).rejects.toThrow(OverpaymentError);
   });
 
+  it("THE CORE GUARANTEE under concurrency: two different, individually-valid payments fired at the same instant can never together overpay the invoice (Phase P)", async () => {
+    // Adversarial test, not a made-up scenario: two team members recording
+    // a payment on the same invoice within the same second (or one eager
+    // double-click producing two different idempotency keys) is a
+    // completely realistic real-world race, distinct from the
+    // already-tested "retry the same key" idempotency case above. Each of
+    // these two payments is individually valid against the invoice's
+    // $100 total; only together do they overpay it — the question is
+    // whether recordPayment's check-then-write is safe against two of
+    // these running at literally the same time, not just sequentially.
+    const { business, invoice } = await sentInvoice(10000);
+
+    const attempt = (idempotencyKey: string) =>
+      recordPayment({
+        businessId: business.id,
+        invoiceId: invoice.id,
+        amountCents: 7000,
+        method: "cash",
+        paidAt: new Date(),
+        idempotencyKey,
+      });
+
+    const results = await Promise.allSettled([attempt("race-a"), attempt("race-b")]);
+    const succeeded = results.filter((r) => r.status === "fulfilled");
+    const failed = results.filter((r) => r.status === "rejected");
+
+    // Real, provable invariant, not just "at least one failed": read the
+    // actual committed rows back and sum them — this is what would
+    // actually be true in the database regardless of which branch above
+    // took which path, and is what would catch a bug where both
+    // "succeeded" from the caller's point of view but one silently
+    // clamped or otherwise corrupted the total instead of throwing.
+    const paidRows = await prisma.payment.findMany({
+      where: { invoiceId: invoice.id, voidedAt: null },
+    });
+    const totalRecorded = paidRows.reduce((sum, p) => sum + p.amountCents, 0);
+    expect(totalRecorded).toBeLessThanOrEqual(10000);
+
+    // Exactly one should have succeeded and one should have been rejected
+    // as an overpayment — not "both succeeded" (money bug) and not "both
+    // failed" (a real payment incorrectly refused).
+    expect(succeeded.length).toBe(1);
+    expect(failed.length).toBe(1);
+    if (failed[0]!.status === "rejected") {
+      expect(failed[0]!.reason).toBeInstanceOf(OverpaymentError);
+    }
+  });
+
   it("is idempotent: retrying the same key does not double-record money", async () => {
     const { business, invoice } = await sentInvoice(10000);
     const key = "retry-key-1";
