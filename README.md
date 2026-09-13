@@ -520,31 +520,85 @@ need a shadow database) to work around it while developing, and the fix
 was verified by reproducing the shadow-db failure with/without that one
 line.
 
-## Deployment
+## Deployment (Phase C)
 
-Not yet deployed to a public URL. What IS real: the database is a real
-Supabase Postgres project (via its Supavisor pooler — see "Environment
-variables" above), and dev/seed/tests/E2E already run against it. What's
-still needed to actually deploy the app itself:
+Live at **https://fable-tan-three.vercel.app** (Vercel, no custom domain
+yet — see below for why that's fine). Deployed via the Vercel CLI against
+a personal access token rather than the interactive dashboard flow, and
+connected to `github.com/4rus/Fable` for future git-triggered deploys.
 
-1. Pick a hosting target for the Next.js app (Vercel is the obvious fit)
-   and set `DATABASE_URL` / `DIRECT_URL` / `NEXTAUTH_SECRET` /
-   `NEXTAUTH_URL` (and `ENCRYPTION_KEY`, `RESEND_API_KEY`, `EMAIL_FROM`)
-   there — no schema changes needed, this environment's `.env` values
-   already point at the real target database.
-2. Run `npx prisma migrate deploy` (not `migrate dev`) as part of your
-   deploy step.
-3. **Done, needs credentials:** file uploads
-   (`src/server/services/attachments.ts`) go through a provider-agnostic
-   storage layer (`src/server/services/storage/`) with two real backends
-   — local disk (`localDisk.ts`, the dev default, same isolation risk as
-   before: doesn't survive a redeploy or scale past one instance) and
-   Supabase Storage (`supabaseStorage.ts`, a private bucket, created
-   automatically on first upload). Set `SUPABASE_URL` and
-   `SUPABASE_SERVICE_ROLE_KEY` to switch new uploads to the real backend
-   — no other code change needed. Each `Attachment` row records which
-   backend it actually landed on (`provider` column), so flipping this on
-   never breaks reading/deleting files uploaded before it was set.
-4. Add a real error-tracking/observability tool (Sentry or equivalent) —
-   `src/lib/logger.ts` has a single seam (`logError`) where that plugs in;
-   right now it only writes structured JSON to stdout.
+**Database isolation.** Production reads/writes its own dedicated
+`production` schema in the same Supabase project dev/test/e2e already
+share — not the `public` schema local dev and demo data live in. Built
+the same way `test`/`e2e` are (see "Testing" above): a schema-scoped
+`DATABASE_URL`/`DIRECT_URL` (same connection string, `?schema=production`
+appended), migrated with `prisma migrate deploy`. Production also has its
+own `NEXTAUTH_SECRET`/`ENCRYPTION_KEY`, generated fresh rather than
+reusing dev's — a compromise of one environment's signing/encryption
+material never exposes the other's.
+
+**Real bugs found deploying this for the first time, not just
+config-following:**
+1. Vercel caches `node_modules` between builds and skips Prisma's
+   client-generation step unless told to run it explicitly — the first
+   deploy failed with `PrismaClientInitializationError` until
+   `"postinstall": "prisma generate"` was added to `package.json`.
+2. The `enable_rls` migration (and the narration-cache one after it)
+   hardcoded `"public".` in every `ALTER TABLE ... ENABLE ROW LEVEL
+   SECURITY` statement, unlike every other statement in those files
+   (which are correctly unqualified, relying on Prisma setting the
+   connection's `search_path` to whatever schema the URL specifies).
+   Deploying to the new `production` schema "succeeded" but had silently
+   re-enabled RLS on the `public` tables again (harmless — already
+   enabled) instead of the new `production` ones. Caught by directly
+   querying `pg_tables.rowsecurity` after the deploy rather than trusting
+   the migration's exit code; fixed both migration files and enabled RLS
+   on all 18 `production`-schema tables by hand, then re-verified true
+   for each one.
+
+**Error tracking (Sentry).** Real, not scaffolding — `sentry.server.config.ts`
+/ `sentry.edge.config.ts` / `instrumentation.ts` / `instrumentation-client.ts`,
+same graceful-degradation pattern as every other integration (a missing
+`SENTRY_DSN` is a documented SDK no-op). `src/lib/logger.ts`'s `logError`
+— already the one seam every error in this app was written to go
+through — now also calls `Sentry.captureException`, so every existing
+call site gets real error tracking with no per-call-site change.
+`src/app/global-error.tsx` covers the one class of error `logError` can't
+reach: a React render crash in the root layout. The client SDK tunnels
+through this app's own `/monitoring` path instead of posting to Sentry's
+ingest host directly, so the existing CSP needed no third-party
+`connect-src` addition. Verified for real: triggered an actual uncaught
+exception in a live browser session against the deployed URL and
+confirmed a real `POST /monitoring` returned 200, tagged with the correct
+org/project IDs. **Known gap:** source map upload to Sentry is disabled
+(needs a Sentry auth token + org/project slug not yet configured), so
+stack traces there show minified code today — a config-only fix later,
+not a re-architecture.
+
+**CI (GitHub Actions, `.github/workflows/ci.yml`).** Runs typecheck,
+lint, the full Vitest suite, Playwright E2E, and a production build on
+every push to `main` and every PR — against the same real Postgres
+`test`/`e2e` schemas local dev uses, not mocks. Needs repo secrets added
+(Settings → Secrets and variables → Actions) before it goes green:
+`DATABASE_URL`, `DIRECT_URL`, `PLAID_CLIENT_ID`, `PLAID_SECRET`,
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`,
+`EMAIL_FROM`, `ANTHROPIC_API_KEY` (same values as local `.env`) — not
+added automatically since they're real credentials.
+
+**Still real gaps, not silently dropped:**
+- No custom domain — genuinely optional. Vercel's free subdomain above
+  is a real, HTTPS-secured public URL; a custom domain is a pure DNS/
+  branding addition that can be bolted on at any point without touching
+  any of the infrastructure work described here.
+- Sentry source maps (see above).
+- Plaid is still Sandbox-only — real bank data needs Plaid's separate
+  Production application/approval, unrelated to hosting.
+- `src/lib/rate-limit.ts` is still in-memory/single-instance, which is
+  fine on Vercel's current single-instance-per-region behavior for this
+  app's traffic today but won't scale past that — swap for a
+  Redis-backed limiter before it matters.
+- File uploads (`src/server/services/attachments.ts`) already support
+  real object storage in production — `SUPABASE_URL` /
+  `SUPABASE_SERVICE_ROLE_KEY` are set there too, same as dev, so new
+  uploads land in real Supabase Storage automatically (see "Security
+  model" → "File uploads" above); no further work needed here.
