@@ -4,6 +4,8 @@ import { createTestBusiness, createTestUser, createTestMembership, createTestCus
 import { getOnboardingStatus, confirmStartingCash } from "@/server/services/onboarding";
 import { createInvoice } from "@/server/services/invoices";
 import { ForbiddenError } from "@/server/tenant";
+import { startingCashSchema } from "@/lib/validation/onboarding";
+import { dollarsToCents } from "@/lib/money";
 
 // skipOnboardingAction/confirmStartingCashAction go through
 // requireMembership/requireOwner, which call getServerSession internally
@@ -168,5 +170,44 @@ describe("confirmStartingCashAction", () => {
 
     const reloaded = await prisma.business.findUniqueOrThrow({ where: { id: business.id } });
     expect(reloaded.startingCashConfirmedAt).toBeNull();
+  });
+
+  it("rejects an absurdly large amount with a clear message, rather than reaching the database (Phase P)", async () => {
+    // Real bug found by adversarial testing: this used to pass format
+    // validation, then fail at the Prisma layer with "Unable to fit value
+    // 1e+23 into a 64-bit signed integer" — a real error, but surfaced to
+    // the user as a generic "Could not save. Please try again," which is
+    // actively misleading since retrying the same value never succeeds.
+    const business = await createTestBusiness();
+    const user = await createTestUser();
+    await createTestMembership(user.id, business.id, "OWNER");
+    mockSessionAs(user.id);
+
+    const result = await confirmStartingCashAction(
+      business.id,
+      {},
+      formData("999999999999999999999", "2026-01-01"),
+    );
+    expect(result.error).toBe("Enter an amount under $10,000,000");
+
+    const reloaded = await prisma.business.findUniqueOrThrow({ where: { id: business.id } });
+    expect(reloaded.startingCashConfirmedAt).toBeNull();
+    expect(reloaded.startingCashCents).toBe(0); // untouched, not silently clamped
+  });
+
+  it("accepts a large but realistic negative amount (a business can start owing money)", async () => {
+    // Exercises the schema + service directly, not the action — the
+    // action's success path calls revalidatePath(), which needs a real
+    // Next.js request context unavailable under plain Vitest (same
+    // reason confirmStartingCash was factored out as its own
+    // service function in the first place, see its own doc comment).
+    const parsed = startingCashSchema.safeParse({ amount: "-9999999.99", asOfDate: "2026-01-01" });
+    expect(parsed.success).toBe(true);
+
+    const business = await createTestBusiness();
+    await confirmStartingCash(business.id, dollarsToCents(parsed.success ? parsed.data.amount : "0"), new Date());
+
+    const reloaded = await prisma.business.findUniqueOrThrow({ where: { id: business.id } });
+    expect(reloaded.startingCashCents).toBe(-999999999);
   });
 });

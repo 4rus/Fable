@@ -138,6 +138,23 @@ export async function recordPayment(params: {
       return existing.invoice;
     }
 
+    // Row lock BEFORE reading the invoice/its payments (Phase P): two
+    // concurrent recordPayment calls on the same invoice, each
+    // individually valid, could otherwise both pass the overpayment
+    // check below before either had committed, together overpaying the
+    // invoice — confirmed as a real, reproducible bug with a genuine
+    // concurrent-payment test (tests/invoices.test.ts), not a
+    // theoretical one, before this fix existed.
+    // `SELECT ... FOR UPDATE` makes a second concurrent transaction on
+    // the same invoice id block here until the first one commits or rolls
+    // back, so its own read of `payments` below is guaranteed to see
+    // whatever the first transaction just wrote — turning this
+    // check-then-write into something actually safe under concurrency,
+    // not just under sequential calls. Scoped to this one invoice row
+    // only; unrelated invoices/businesses are completely unaffected and
+    // never contend with each other.
+    await tx.$queryRaw`SELECT id FROM "invoices" WHERE id = ${params.invoiceId} FOR UPDATE`;
+
     // Tenant + existence check scoped to businessId, not just invoiceId.
     const invoice = await tx.invoice.findFirst({
       where: { id: params.invoiceId, businessId: params.businessId, deletedAt: null },
