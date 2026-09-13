@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { getCurrentCashCents, computeForecast } from "@/server/services/forecast";
 import { getAllInsights, summarizeInsights } from "@/server/services/insights";
 import { narrateInsights } from "@/server/services/narration";
+import { getOnboardingStatus } from "@/server/services/onboarding";
 import { formatCentsCompact } from "@/lib/money";
 import ThingsToDo from "@/components/ThingsToDo";
+import OnboardingChecklist from "@/components/OnboardingChecklist";
 
 function dateline(): string {
   return new Date().toLocaleDateString(undefined, {
@@ -17,6 +20,13 @@ function dateline(): string {
 export default async function DashboardPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
   const business = maybeBusiness!;
+
+  // Brand-new, untouched business: send them to the one-time guided setup
+  // screen instead of a page that would otherwise say "you're in a good
+  // position" about literally nothing. Once skipped or any real data
+  // exists, this is permanently false — see getOnboardingStatus.
+  const onboarding = await getOnboardingStatus(business.id);
+  if (!onboarding.isComplete) redirect("/app/setup");
 
   const [cashCents, f30, f90, rawInsights] = await Promise.all([
     getCurrentCashCents(business.id),
@@ -90,12 +100,18 @@ export default async function DashboardPage() {
 
       <div>
         <p className="font-serif text-xl tracking-tight text-ink">
-          {thingsToDo.length === 0
-            ? "Nothing else needs your attention today"
-            : `${thingsToDo.length} thing${thingsToDo.length === 1 ? "" : "s"} worth doing today`}
+          {thingsToDo.length > 0
+            ? `${thingsToDo.length} thing${thingsToDo.length === 1 ? "" : "s"} worth doing today`
+            : onboarding.steps.length > 0
+              ? "A few things left to set up"
+              : "Nothing else needs your attention today"}
         </p>
         <div className="mt-5">
-          <ThingsToDo insights={thingsToDo} businessId={business.id} />
+          {thingsToDo.length > 0 ? (
+            <ThingsToDo insights={thingsToDo} businessId={business.id} />
+          ) : (
+            <OnboardingChecklist steps={onboarding.steps} />
+          )}
         </div>
       </div>
     </div>
