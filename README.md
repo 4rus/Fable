@@ -213,17 +213,26 @@ are also stripped of control characters (`src/lib/validation/attachments.ts`)
 before being embedded in the download route's `Content-Disposition`
 header. See `src/server/services/attachments.ts`.
 
-**HTTP security headers** (`next.config.mjs`, applied to every response):
-`X-Frame-Options: DENY` and a `Content-Security-Policy` with
-`frame-ancestors 'none'` (clickjacking), `X-Content-Type-Options: nosniff`
+**HTTP security headers**: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`
 (MIME sniffing), `Referrer-Policy: strict-origin-when-cross-origin`,
-`Permissions-Policy` disabling camera/mic/geolocation, and HSTS. The CSP's
-`script-src`/`style-src` need `'unsafe-inline'` because the App Router
-injects its own inline RSC-hydration `<script>` tags — tightening that to
-a nonce-based CSP (via `middleware.ts` generating a per-request nonce) is
-real follow-up work, not done yet. `'unsafe-eval'` is added to `script-src`
-in development only (`next dev`'s webpack HMR needs it); the production
-CSP does not include it.
+`Permissions-Policy` disabling camera/mic/geolocation, and HSTS — all
+static, set in `next.config.mjs`. `Content-Security-Policy` (with
+`frame-ancestors 'none'` against clickjacking) is generated per-request
+in `src/middleware.ts` instead (Phase Q), because closing its one real
+gap needed per-request state: `script-src` used to need `'unsafe-inline'`
+since the App Router injects its own inline RSC-hydration `<script>`
+tags, which would have let ANY inline script execute if injected. Now a
+fresh cryptographic nonce is generated on every request and only script
+tags carrying that exact nonce can run — Next.js automatically applies
+it to its own hydration scripts once it sees the nonce in the response's
+own CSP header (no other wiring needed). `style-src` keeps
+`'unsafe-inline'` deliberately (Next's automatic nonce propagation is
+script-only; that gap is narrower and wasn't the one this migration
+targeted). `'unsafe-eval'` is added to `script-src` in development only
+(`next dev`'s webpack HMR needs it); the production CSP does not include
+it. **Note:** `middleware.ts` must live at `src/middleware.ts` in this
+project (not the repo root) since the app uses a `src/` directory —
+Next.js silently ignores a root-level one otherwise, with no error.
 
 **Security audit log.** Beyond the ephemeral stdout structured logger
 (`src/lib/logger.ts`), sensitive account/business events are written to
@@ -575,10 +584,13 @@ ingest host directly, so the existing CSP needed no third-party
 `connect-src` addition. Verified for real: triggered an actual uncaught
 exception in a live browser session against the deployed URL and
 confirmed a real `POST /monitoring` returned 200, tagged with the correct
-org/project IDs. **Known gap:** source map upload to Sentry is disabled
-(needs a Sentry auth token + org/project slug not yet configured), so
-stack traces there show minified code today — a config-only fix later,
-not a re-architecture.
+org/project IDs. **Source maps (Phase Q):** real, not disabled — set
+`org`/`project`/`authToken` (from `SENTRY_AUTH_TOKEN`) in
+`next.config.mjs`'s `withSentryConfig` call, so stack traces in Sentry
+show actual source instead of minified output. Without
+`SENTRY_AUTH_TOKEN` set, the upload step just logs a warning and skips
+(same graceful-degradation shape as every other integration here) —
+never fails the build.
 
 **CI (GitHub Actions, `.github/workflows/ci.yml`).** Runs typecheck,
 lint, the full Vitest suite, Playwright E2E, and a production build on
@@ -595,9 +607,11 @@ added automatically since they're real credentials.
   is a real, HTTPS-secured public URL; a custom domain is a pure DNS/
   branding addition that can be bolted on at any point without touching
   any of the infrastructure work described here.
-- Sentry source maps (see above).
 - Plaid is still Sandbox-only — real bank data needs Plaid's separate
   Production application/approval, unrelated to hosting.
+- **Fixed in Phase Q:** Sentry source maps (see above) and CSP's
+  `'unsafe-inline'` script-src gap (see "Security model" →
+  "HTTP security headers").
 - **Fixed in Phase Q:** rate limiting was documented here as "fine on
   Vercel's current single-instance behavior" — that was never quite
   true (Vercel runs multiple isolated function instances, each with its

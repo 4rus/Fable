@@ -54,11 +54,16 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // failure — /app/setup pulls in getActiveBusinessContext +
     // getOnboardingStatus on top of Next dev's own on-demand compile of
     // every module the route touches for the first time in this fresh
-    // server process. 30s matches the headroom this suite already gives
-    // slower steps elsewhere (see playwright.config.ts's expect.timeout)
-    // without hiding an actual hang, which the overall 120s test timeout
-    // still catches.
-    await page.waitForURL(/\/app\/setup$/, { timeout: 30_000 });
+    // server process, PLUS (Phase Q) middleware.ts now compiling and
+    // running on every single request for CSP nonce generation — a real,
+    // structural latency addition, not just more app code. 45s (raised
+    // from 30s after this step timed out once immediately following the
+    // middleware migration, then passed clean twice in a row — following
+    // this suite's own established pattern from Phase I: check for a
+    // genuinely-too-tight budget before assuming pure flakiness) without
+    // hiding an actual hang, which the overall 120s test timeout still
+    // catches.
+    await page.waitForURL(/\/app\/setup$/, { timeout: 45_000 });
     await expect(page.getByText("Let's get Fable working for you.")).toBeVisible();
     // This journey exercises manual entry (customer/invoice/payment), not
     // the bank-connection path — skip the guided screen the same way a
