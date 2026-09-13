@@ -130,9 +130,20 @@ export async function recordPayment(params: {
       include: { invoice: { include: { payments: true, lineItems: true, customer: true } } },
     });
     if (existing) {
-      if (existing.businessId !== params.businessId || existing.invoiceId !== params.invoiceId) {
-        // Same idempotency key reused across a different invoice/business is
-        // a client bug (or an attack), not a legitimate retry — reject loudly.
+      // Same idempotency key reused for a different invoice/business, OR
+      // a different amount on the same invoice, is a client bug (or an
+      // attack) — not a legitimate retry, which resubmits the identical
+      // request. Reject loudly rather than silently returning the
+      // original payment's result: without the amount check (Phase P —
+      // found by deliberately trying this), a caller expecting their
+      // *new* amount to be recorded would instead get a quiet, wrong
+      // "success" for the *old* one, with no error to reveal the
+      // mismatch ever happened.
+      if (
+        existing.businessId !== params.businessId ||
+        existing.invoiceId !== params.invoiceId ||
+        existing.amountCents !== params.amountCents
+      ) {
         throw new ForbiddenError("Idempotency key does not match the original request");
       }
       return existing.invoice;

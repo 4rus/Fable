@@ -121,7 +121,15 @@ export function parseExpenseCsv(csvText: string): CsvImportPreview {
       }
     }
 
-    if (amountDollars === null) {
+    // Same $10M sanity ceiling as every other money input in the app —
+    // see the long comment on validation/csvImport.ts's amountCents bound
+    // for the real bug this closes: a huge (or Infinity-magnitude,
+    // e.g. a 400-digit number) value in a bank statement's amount column
+    // survived parseAmount()'s format check, then threw inside
+    // dollarsToCents() below uncaught by this loop — crashing the WHOLE
+    // file's preview, not just skipping the one bad row the way every
+    // other kind of invalid amount already does.
+    if (amountDollars === null || !Number.isFinite(amountDollars) || Math.abs(amountDollars) > 10_000_000) {
       skippedInvalidCount++;
       continue;
     }
