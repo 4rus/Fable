@@ -31,6 +31,8 @@
  * header is static, not per-request — allow all three Plaid API hosts
  * rather than only whichever one happens to be configured right now.
  */
+import { withSentryConfig } from "@sentry/nextjs/config";
+
 const isDev = process.env.NODE_ENV !== "production";
 
 const securityHeaders = [
@@ -70,4 +72,18 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Error tracking (see sentry.server.config.ts / instrumentation-client.ts
+// for the actual init calls — this wrapper's only job is build-time
+// wiring). Source map upload is deliberately left disabled: it needs a
+// Sentry org/project slug + auth token we haven't configured, and skipping
+// it only means stack traces in Sentry show minified code instead of
+// original source — a real but acceptable gap until that's set up, not a
+// silent one. `tunnelRoute` makes the browser SDK post error reports
+// through this app's own `/monitoring` path instead of Sentry's ingest
+// host directly (see instrumentation-client.ts for why).
+export default withSentryConfig(nextConfig, {
+  silent: true,
+  tunnelRoute: "/monitoring",
+  sourcemaps: { disable: true },
+  webpack: { treeshake: { removeDebugLogging: true }, automaticVercelMonitors: false },
+});

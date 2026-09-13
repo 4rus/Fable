@@ -24,4 +24,8 @@ ALTER TABLE "narrations" ADD CONSTRAINT "narrations_businessId_fkey" FOREIGN KEY
 -- RLS enabled explicitly, it is not automatic. ENABLE (not FORCE) so the
 -- app's own Prisma connection (table owner) is unaffected; every other
 -- role gets zero rows/writes.
-ALTER TABLE "public"."narrations" ENABLE ROW LEVEL SECURITY;
+-- Unqualified (not "public".narrations) — see the Phase C note in
+-- 20260912201500_enable_rls/migration.sql for why a hardcoded schema
+-- prefix here would silently target the wrong schema on a schema-scoped
+-- deploy (e.g. a "production" schema instead of "public").
+ALTER TABLE "narrations" ENABLE ROW LEVEL SECURITY;
