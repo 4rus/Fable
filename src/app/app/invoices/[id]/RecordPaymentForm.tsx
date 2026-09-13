@@ -67,7 +67,7 @@ export default function RecordPaymentForm({
         <input id="payment-date" name="paidAt" type="date" defaultValue={today} className="field" />
       </div>
       <SubmitButton />
-      {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="w-full text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

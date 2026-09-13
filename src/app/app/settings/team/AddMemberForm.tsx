@@ -39,7 +39,7 @@ export default function AddMemberForm({ businessId }: { businessId: string }) {
         They need a Fable account already — this attaches them to your workspace, it
         doesn&apos;t send an email invite yet.
       </p>
-      {state.error && <p className="text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

@@ -75,7 +75,7 @@ export default function ExpenseAttachments({
         </label>
         <UploadStatus />
       </form>
-      {state.error && <p className="w-full text-xs text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="w-full text-xs text-bad">{state.error}</p>}
     </div>
   );
 }

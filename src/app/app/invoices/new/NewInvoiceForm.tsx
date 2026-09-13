@@ -147,7 +147,7 @@ export default function NewInvoiceForm({
         <textarea id="invoice-notes" name="notes" rows={2} className="field" />
       </div>
 
-      {state.error && <p className="text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
       <SubmitButton />
     </form>
   );
