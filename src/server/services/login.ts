@@ -38,7 +38,7 @@ export async function verifyCredentials(
   ip: string,
 ): Promise<VerifiedCredentialsUser | null> {
   const normalizedEmail = email.toLowerCase();
-  const rate = checkRateLimit(`login:${ip}:${normalizedEmail}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  const rate = await checkRateLimit(`login:${ip}:${normalizedEmail}`, LOGIN_LIMIT, LOGIN_WINDOW_MS);
   if (!rate.allowed) {
     logWarn("login rate limit exceeded", { ip, email: normalizedEmail });
     return null;

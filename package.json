@@ -26,6 +26,7 @@
     "@react-pdf/renderer": "^4.9.0",
     "@sentry/nextjs": "^10.74.0",
     "@supabase/supabase-js": "^2.116.0",
+    "@upstash/redis": "^1.38.4",
     "bcryptjs": "^2.4.3",
     "csv-parse": "^7.0.2",
     "jose": "^6.2.12",

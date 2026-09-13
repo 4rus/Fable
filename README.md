@@ -196,9 +196,14 @@ double-record money (tested in `tests/invoices.test.ts`). An invoice can
 never accept more in payments than its total (`OverpaymentError`).
 
 **Rate limiting.** Login and signup are rate-limited per IP+identifier
-(`src/lib/rate-limit.ts`) — see the comment there for the current
-in-memory implementation's limits (single-instance only; swap for a
-Redis-backed limiter before running more than one server process).
+(`src/lib/rate-limit.ts`) — real Upstash Redis when `UPSTASH_REDIS_REST_URL`/
+`UPSTASH_REDIS_REST_TOKEN` are set (Phase Q), so the limit is enforced
+correctly across Vercel's multiple serverless function instances, not
+just within one. Falls back to an honest in-memory counter without
+those set (fine for local dev; genuinely NOT a real brute-force
+protection once deployed to more than one instance — see the module's
+own comment for why). Verified against real Upstash Redis in
+`tests/rate-limit.test.ts`.
 
 **File uploads** (expense receipts, invoice attachments): validated by
 actual content sniffing (not just the claimed MIME type or extension),
@@ -593,10 +598,13 @@ added automatically since they're real credentials.
 - Sentry source maps (see above).
 - Plaid is still Sandbox-only — real bank data needs Plaid's separate
   Production application/approval, unrelated to hosting.
-- `src/lib/rate-limit.ts` is still in-memory/single-instance, which is
-  fine on Vercel's current single-instance-per-region behavior for this
-  app's traffic today but won't scale past that — swap for a
-  Redis-backed limiter before it matters.
+- **Fixed in Phase Q:** rate limiting was documented here as "fine on
+  Vercel's current single-instance behavior" — that was never quite
+  true (Vercel runs multiple isolated function instances, each with its
+  own memory, so an in-memory counter's effective limit multiplies by
+  however many instances handle a burst of traffic). Now backed by real
+  Upstash Redis, shared correctly across every instance — see "Security
+  model" → "Rate limiting" above.
 - File uploads (`src/server/services/attachments.ts`) already support
   real object storage in production — `SUPABASE_URL` /
   `SUPABASE_SERVICE_ROLE_KEY` are set there too, same as dev, so new
