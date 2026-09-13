@@ -39,7 +39,7 @@ export async function signupAction(
   // here, and it's the only thing standing between this form and a script
   // that mass-creates accounts.
   const ip = getClientIp(await headers());
-  const rate = checkRateLimit(`signup:${ip}`, SIGNUP_LIMIT, SIGNUP_WINDOW_MS);
+  const rate = await checkRateLimit(`signup:${ip}`, SIGNUP_LIMIT, SIGNUP_WINDOW_MS);
   if (!rate.allowed) {
     return { error: "Too many accounts created from this network recently. Please try again later." };
   }
@@ -83,7 +83,7 @@ export async function requestPasswordResetAction(
   }
 
   const ip = getClientIp(await headers());
-  const rate = checkRateLimit(`reset-request:${ip}`, RESET_REQUEST_LIMIT, RESET_REQUEST_WINDOW_MS);
+  const rate = await checkRateLimit(`reset-request:${ip}`, RESET_REQUEST_LIMIT, RESET_REQUEST_WINDOW_MS);
   if (!rate.allowed) {
     return { error: "Too many reset attempts from this network. Please try again later." };
   }
