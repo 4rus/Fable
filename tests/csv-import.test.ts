@@ -65,6 +65,25 @@ describe("parseExpenseCsv", () => {
   it("rejects an empty file", () => {
     expect(() => parseExpenseCsv("Date,Description,Amount\n")).toThrow(CsvParseError);
   });
+
+  it("skips an absurdly large amount as an invalid row, instead of crashing the whole file's preview (Phase P)", () => {
+    // Adversarial: a bank-statement CSV's amount column is arbitrary text
+    // an attacker (or a corrupted export) fully controls. Before this
+    // was fixed, one row with an extreme value made it all the way to
+    // dollarsToCents(), which throws MoneyError on a non-finite result —
+    // uncaught here, that crashed parseExpenseCsv() entirely, so even
+    // the OTHER, perfectly legitimate rows in the same file never got
+    // previewed at all.
+    const huge = "9".repeat(400) + ".00";
+    const csv = ["Date,Description,Amount", `2026-01-05,Bad Row,-${huge}`, "2026-01-06,Legit Vendor,-42.50"].join(
+      "\n",
+    );
+
+    const result = parseExpenseCsv(csv);
+    expect(result.expenseRows).toHaveLength(1);
+    expect(result.expenseRows[0]!.vendorName).toBe("Legit Vendor");
+    expect(result.skippedInvalidCount).toBe(1);
+  });
 });
 
 describe("commitExpenseImport", () => {

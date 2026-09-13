@@ -178,6 +178,27 @@ describe("payments", () => {
     expect(amountPaidCents({ payments })).toBe(5000);
   });
 
+  it("rejects reusing an idempotency key with a DIFFERENT amount, rather than silently returning the original (Phase P)", async () => {
+    // The existing idempotency check above only guards a true retry — the
+    // exact same request submitted twice. It already rejected a key
+    // reused across a different invoice/business as a client bug; a key
+    // reused for a DIFFERENT amount on the SAME invoice is the same class
+    // of bug and deserves the same loud rejection, not a silent
+    // "success" that quietly ignores the second amount entirely.
+    const { business, invoice } = await sentInvoice(10000);
+    const key = "amount-mismatch-key";
+    await recordPayment({ businessId: business.id, invoiceId: invoice.id, amountCents: 5000, method: "cash", paidAt: new Date(), idempotencyKey: key });
+
+    await expect(
+      recordPayment({ businessId: business.id, invoiceId: invoice.id, amountCents: 3000, method: "cash", paidAt: new Date(), idempotencyKey: key }),
+    ).rejects.toThrow(ForbiddenError);
+
+    // The original payment is untouched either way.
+    const payments = await prisma.payment.findMany({ where: { invoiceId: invoice.id } });
+    expect(payments).toHaveLength(1);
+    expect(payments[0]!.amountCents).toBe(5000);
+  });
+
   it("refuses to record a payment against a DRAFT invoice", async () => {
     const business = await createTestBusiness();
     const customer = await createTestCustomer(business.id);
