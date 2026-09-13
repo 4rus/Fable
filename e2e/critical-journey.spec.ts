@@ -40,25 +40,34 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     await expect(page.getByText("Account created")).toBeVisible();
   });
 
-  await test.step("log in and see an empty-state dashboard", async () => {
+  await test.step("log in, land on the guided setup screen (Phase N), skip it", async () => {
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill(password);
     await page.getByRole("button", { name: "Sign in" }).click();
 
     // The login page does a client-side signIn() call, then a router push
-    // on success — wait for the actual navigation rather than the default
-    // (short) assertion poll, so a slow first-compile of /app doesn't read
-    // as a login failure. /app pulls in the whole insight + forecast
-    // engine (getAllInsights -> five-plus insight functions, several of
-    // which call computeForecast three times each) on top of Next dev's
-    // own on-demand compile of every module that route touches for the
-    // first time in this fresh server process — as that surface has
-    // grown, 15s (this test's original budget) started failing
-    // consistently rather than occasionally. 30s matches the headroom
-    // this suite already gives slower steps elsewhere (see
-    // playwright.config.ts's expect.timeout) without hiding an actual
-    // hang, which the overall 120s test timeout still catches.
+    // to /app — but a brand-new business has zero data, so /app itself
+    // redirects server-side to the one-time guided setup screen
+    // (/app/setup, Phase N) rather than rendering the real dashboard.
+    // Wait for the actual navigation rather than the default (short)
+    // assertion poll, so a slow first-compile doesn't read as a login
+    // failure — /app/setup pulls in getActiveBusinessContext +
+    // getOnboardingStatus on top of Next dev's own on-demand compile of
+    // every module the route touches for the first time in this fresh
+    // server process. 30s matches the headroom this suite already gives
+    // slower steps elsewhere (see playwright.config.ts's expect.timeout)
+    // without hiding an actual hang, which the overall 120s test timeout
+    // still catches.
+    await page.waitForURL(/\/app\/setup$/, { timeout: 30_000 });
+    await expect(page.getByText("Let's get Fable working for you.")).toBeVisible();
+    // This journey exercises manual entry (customer/invoice/payment), not
+    // the bank-connection path — skip the guided screen the same way a
+    // real user choosing manual entry would.
+    await page.getByRole("button", { name: "I'll do this manually" }).click();
     await page.waitForURL(/\/app$/, { timeout: 30_000 });
+  });
+
+  await test.step("see an empty-state dashboard with the onboarding checklist", async () => {
     // The business name legitimately appears twice (sidebar switcher +
     // dashboard dateline) — assert on the dateline specifically.
     await expect(page.getByText(`${businessName} ·`)).toBeVisible();
@@ -66,6 +75,12 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // plainly, not show a stale or fabricated number.
     await expect(page.getByText("You're in a good position.")).toBeVisible();
     await expect(page.getByText("$0").first()).toBeVisible();
+    // Having just skipped the guided setup, the persistent checklist
+    // (Phase N) should fill the "things to do" slot instead of a bare
+    // "nothing needs attention" — proves the two onboarding surfaces are
+    // actually wired together, not just independently reachable.
+    await expect(page.getByText("A few things left to set up")).toBeVisible();
+    await expect(page.getByText("Add your first customer and invoice")).toBeVisible();
   });
 
   await test.step("add a customer", async () => {
