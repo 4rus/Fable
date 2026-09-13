@@ -54,7 +54,7 @@ export default function NewExpenseForm({
         <input type="checkbox" name="isRecurring" className="rounded border-line" /> Recurring
       </label>
       <SubmitButton />
-      {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="w-full text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

@@ -30,7 +30,7 @@ export default function NewCustomerForm({ businessId }: { businessId: string }) 
         <input id="customer-email" name="email" type="email" className="field" />
       </div>
       <SubmitButton />
-      {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="w-full text-sm text-bad">{state.error}</p>}
     </form>
   );
 }

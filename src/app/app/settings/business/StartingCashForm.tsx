@@ -55,7 +55,7 @@ export default function StartingCashForm({
         />
       </div>
       <SubmitButton />
-      {state.error && <p className="w-full text-sm text-bad">{state.error}</p>}
+      {state.error && <p role="alert" className="w-full text-sm text-bad">{state.error}</p>}
       {!state.error && confirmed && (
         <p className="w-full text-xs text-muted">
           Fable calculates your cash position after this date as this balance, plus payments
