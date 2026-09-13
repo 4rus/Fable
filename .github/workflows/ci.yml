@@ -1,0 +1,73 @@
+name: CI
+
+# Runs the full test suite (unit/integration + E2E) plus lint/typecheck/
+# build on every push and PR. Nothing here mocks the database — like local
+# dev, this runs against the same real Supabase Postgres project via
+# dedicated "test"/"e2e" schemas (tests/global-setup.ts, e2e/global-setup.ts
+# drop and recreate them fresh every run), so CI proves the same real-infra
+# guarantees the README's "Testing" section describes, not a fake stand-in.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel a stale run when new commits land on the same PR/branch, so
+# multiple pushes don't queue up redundant runs against the shared schemas.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_URL: ${{ secrets.DIRECT_URL }}
+      # Real third-party credentials — without these, the tests that
+      # exercise real Plaid Sandbox / Supabase Storage / Resend / Anthropic
+      # calls fall back to their honest "not configured" path rather than
+      # failing, but CI is more useful when it proves the real integrations
+      # still work too. Add these as repo secrets (Settings -> Secrets and
+      # variables -> Actions) with the same values as your local .env.
+      PLAID_CLIENT_ID: ${{ secrets.PLAID_CLIENT_ID }}
+      PLAID_SECRET: ${{ secrets.PLAID_SECRET }}
+      PLAID_ENV: sandbox
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Test-only values — never real secrets, matching e2e/global-setup's
+      # own hardcoded test webServer env for the same reason (deliberately
+      # not the developer's real dev-signing keys).
+      NEXTAUTH_SECRET: ci-test-secret-not-for-production-use-only
+      ENCRYPTION_KEY: ZTJlLXRlc3Qtb25seS1lbmNyeXB0aW9uLWtleS0zMmI=
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit + integration tests
+        run: npm test
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Build
+        run: npm run build

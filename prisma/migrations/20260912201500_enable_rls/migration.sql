@@ -29,24 +29,37 @@
 --     is exactly right: nobody should ever reach this data except through
 --     this app's own server-side code.
 
-ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."two_factor_backup_codes" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."password_reset_tokens" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."memberships" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."businesses" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."bank_connections" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."financial_accounts" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."transactions" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."merchant_category_rules" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."customers" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."invoices" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."invoice_line_items" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."payments" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."categories" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."expenses" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."attachments" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "two_factor_backup_codes" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "password_reset_tokens" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "memberships" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "businesses" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "bank_connections" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "financial_accounts" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "transactions" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "merchant_category_rules" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "customers" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "invoices" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "invoice_line_items" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "payments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "categories" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "expenses" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "attachments" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "audit_logs" ENABLE ROW LEVEL SECURITY;
 
+-- NOTE (added 2026-09-13, during Phase C): the statements above originally
+-- hardcoded the "public" schema (e.g. `ALTER TABLE "public"."users" ...`).
+-- That's wrong for a schema-scoped deploy: Prisma's migration engine sets
+-- the connection's search_path to whatever schema the URL specifies (this
+-- is why every CREATE TABLE / ADD CONSTRAINT elsewhere in this repo's
+-- migrations is already unqualified), so a hardcoded "public" prefix
+-- silently ALTERs the dev tables no matter which schema you're actually
+-- migrating — discovered when deploying a fresh "production" schema
+-- during Phase C: this migration "succeeded" but had enabled RLS on the
+-- "public" tables (again, harmlessly) instead of the new "production"
+-- ones, which then had to be fixed by hand. Unqualified now, so a replay
+-- against any schema affects that schema's own tables, as intended.
+--
 -- NOTE (added 2026-09-12, during Phase J): this file originally also ran
 -- `ALTER TABLE "public"."_prisma_migrations" ENABLE ROW LEVEL SECURITY;`
 -- here. That statement was REMOVED from this historical file (though it

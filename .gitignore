@@ -22,3 +22,7 @@ playwright/.cache
 *.tsbuildinfo
 coverage
 uploads
+
+.vercel
+.env*
+!.env.example
