@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { addCents, formatCentsCompact } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { computeForecast } from "@/server/services/forecast";
 import { countTransactionsNeedingReview } from "@/server/services/bank/reconciliation";
@@ -174,7 +175,7 @@ export async function getCashTrendInsight(businessId: string): Promise<Insight |
     headline: positive
       ? `You brought in ${formatUsd(netCents)} more than you spent this month`
       : `You spent ${formatUsd(Math.abs(netCents))} more than you brought in this month`,
-    explanation: `${recentPayments.length} payment${recentPayments.length === 1 ? "" : "s"} received, ${recentExpenses.length} expense${recentExpenses.length === 1 ? "" : "s"} logged since ${thirtyDaysAgo.toLocaleDateString()}.`,
+    explanation: `${recentPayments.length} payment${recentPayments.length === 1 ? "" : "s"} received, ${recentExpenses.length} expense${recentExpenses.length === 1 ? "" : "s"} logged since ${formatDate(thirtyDaysAgo)}.`,
     why: positive
       ? "Your cash position is growing at your current pace."
       : "Sustained over several months, this pace would draw down your cash reserve.",
@@ -206,7 +207,7 @@ export async function getRunwayWarningInsight(businessId: string): Promise<Insig
     kind: "RECOMMENDATION",
     severity: "critical",
     headline: `Projected to run short on cash within ${first.horizonDays} days`,
-    explanation: `Projected cash on ${new Date(first.targetDate).toLocaleDateString()}: ${formatUsd(first.projectedCashCents)}.`,
+    explanation: `Projected cash on ${formatDate(new Date(first.targetDate))}: ${formatUsd(first.projectedCashCents)}.`,
     why: "Following up on overdue invoices or slowing non-essential spending now would change this trajectory.",
     basis:
       first.assumptions.length > 0
@@ -423,13 +424,13 @@ export async function getDuplicateExpenseInsight(businessId: string): Promise<In
           kind: "FACT",
           severity: "attention",
           headline: `Two ${formatUsd(a.amountCents)} charges to ${a.vendorName} within days of each other`,
-          explanation: `Logged on ${a.incurredAt.toLocaleDateString()} and ${b.incurredAt.toLocaleDateString()} — worth a quick check that this isn't the same charge recorded twice.`,
+          explanation: `Logged on ${formatDate(a.incurredAt)} and ${formatDate(b.incurredAt)} — worth a quick check that this isn't the same charge recorded twice.`,
           why: "A duplicated expense understates your real cash position and skews your spending trend.",
           basis: "Based on matching vendor and amount within 3 days",
           action: { label: "View expenses", href: "/app/expenses" },
           evidence: [
-            { type: "expense", id: a.id, label: `${a.vendorName} — ${formatUsd(a.amountCents)} — ${a.incurredAt.toLocaleDateString()}` },
-            { type: "expense", id: b.id, label: `${b.vendorName} — ${formatUsd(b.amountCents)} — ${b.incurredAt.toLocaleDateString()}` },
+            { type: "expense", id: a.id, label: `${a.vendorName} — ${formatUsd(a.amountCents)} — ${formatDate(a.incurredAt)}` },
+            { type: "expense", id: b.id, label: `${b.vendorName} — ${formatUsd(b.amountCents)} — ${formatDate(b.incurredAt)}` },
           ],
         };
       }

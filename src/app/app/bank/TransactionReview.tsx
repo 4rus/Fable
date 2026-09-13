@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatCentsCompact } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import {
   reconcileExpenseAction,
   matchInvoicePaymentAction,
@@ -92,7 +93,7 @@ function ExpenseRow({
       <div className="min-w-0">
         <p className="truncate text-ink">{item.transaction.merchantName ?? item.transaction.description}</p>
         <p className="mt-0.5 text-xs text-muted">
-          {item.transaction.postedDate.toLocaleDateString()} ·{" "}
+          {formatDate(item.transaction.postedDate)} ·{" "}
           {formatCentsCompact(item.transaction.amountCents, item.transaction.isoCurrencyCode)}
           {item.currentCategory && ` · Looks like ${item.currentCategory.name}`}
           {!item.currentCategory && item.suggestedCategory && ` · Might be ${item.suggestedCategory.name}`}
@@ -152,7 +153,7 @@ function DepositRow({ businessId, item }: { businessId: string; item: Extract<Re
       <div className="min-w-0">
         <p className="truncate text-ink">{item.transaction.merchantName ?? item.transaction.description}</p>
         <p className="mt-0.5 text-xs text-muted">
-          {item.transaction.postedDate.toLocaleDateString()} ·{" "}
+          {formatDate(item.transaction.postedDate)} ·{" "}
           {formatCentsCompact(-item.transaction.amountCents, item.transaction.isoCurrencyCode)} in
           {item.suggestedInvoice && ` · Looks like Invoice ${item.suggestedInvoice.invoiceNumber} (${item.suggestedInvoice.customerName})`}
           {!item.suggestedInvoice && " · No matching open invoice found"}

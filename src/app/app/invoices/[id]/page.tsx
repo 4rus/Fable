@@ -5,6 +5,7 @@ import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { amountPaidCents, balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import StatusChip from "@/components/StatusChip";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SendInvoiceButton from "./SendInvoiceButton";
@@ -43,7 +44,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
           </h1>
           <div className="mt-1.5 flex items-center gap-2 text-sm text-muted">
             <span>
-              Due {invoice.dueDate.toLocaleDateString()}
+              Due {formatDate(invoice.dueDate)}
               {overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
             </span>
             <span>·</span>
@@ -62,12 +63,11 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
               <SendReminderButton
                 businessId={business.id}
                 invoiceId={invoice.id}
-                // Formatted here, server-side, into a plain string — never
-                // pass a raw Date into a client component to format with
-                // .toLocaleDateString() at render time: the server's
-                // locale and the browser's can format it differently,
-                // which is a hydration mismatch, not just a display quirk.
-                lastReminderSentAtLabel={invoice.lastReminderSentAt?.toLocaleDateString() ?? null}
+                // Formatted here, server-side, into a plain string via
+                // src/lib/dates.ts's explicit-locale helper — see that
+                // file's header for why bare .toLocaleDateString() (no
+                // explicit locale) is banned app-wide, not just here.
+                lastReminderSentAtLabel={invoice.lastReminderSentAt ? formatDate(invoice.lastReminderSentAt) : null}
               />
             )}
           </div>
@@ -134,7 +134,7 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
             {invoice.payments.map((p) => (
               <li key={p.id} className="flex justify-between px-4 py-3 text-sm">
                 <span className="text-muted">
-                  {p.paidAt.toLocaleDateString()} · {p.method.replace("_", " ")}
+                  {formatDate(p.paidAt)} · {p.method.replace("_", " ")}
                   {p.voidedAt && <span className="ml-2 text-bad">(voided)</span>}
                 </span>
                 <span className="font-medium tabular-nums text-ink">{formatCents(p.amountCents)}</span>

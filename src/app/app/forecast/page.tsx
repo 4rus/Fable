@@ -2,6 +2,7 @@ import { getActiveBusinessContext } from "@/server/services/businesses";
 import { computeForecast, getCurrentCashCents, getUpcomingReceivables } from "@/server/services/forecast";
 import { narrateForecast } from "@/server/services/narration";
 import { formatCentsCompact, formatCentsDelta } from "@/lib/money";
+import { formatDate, formatDateShort } from "@/lib/dates";
 
 export default async function ForecastPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
@@ -56,7 +57,7 @@ export default async function ForecastPage() {
                 </p>
                 {node.date && (
                   <p className="mt-0.5 text-xs text-muted">
-                    {new Date(node.date).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                    {formatDateShort(new Date(node.date))}
                   </p>
                 )}
                 {node.range && node.range.lowCents !== node.range.highCents && (
@@ -125,7 +126,7 @@ export default async function ForecastPage() {
                 <div>
                   <p className="text-sm text-ink">{e.label}</p>
                   <p className="text-xs text-muted">
-                    {new Date(e.date).toLocaleDateString()}
+                    {formatDate(new Date(e.date))}
                     {e.overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
                   </p>
                 </div>

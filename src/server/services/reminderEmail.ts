@@ -5,6 +5,7 @@ import { formatCents } from "@/lib/money";
 import { sendEmail, type SendEmailResult } from "@/lib/email";
 import { balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { MissingCustomerEmailError } from "@/server/services/invoiceEmail";
+import { formatDateTime } from "@/lib/dates";
 
 /**
  * PAYMENT REMINDERS (Phase K — workflows tied to insights). A real email
@@ -31,7 +32,7 @@ const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 export class ReminderRateLimitedError extends Error {
   constructor(nextEligibleAt: Date) {
     super(
-      `A reminder for this invoice already went out recently. You can send another after ${nextEligibleAt.toLocaleString()}.`,
+      `A reminder for this invoice already went out recently. You can send another after ${formatDateTime(nextEligibleAt)}.`,
     );
     this.name = "ReminderRateLimitedError";
   }
