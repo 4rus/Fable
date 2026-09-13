@@ -11,6 +11,7 @@ import {
   type PreviewRow,
 } from "@/server/actions/csvImport";
 import { formatCents } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 
 const initialPreviewState: PreviewState = {};
 const initialCommitState: CommitState = {};
@@ -145,7 +146,7 @@ export default function ImportForm({
                     aria-label={`Include ${row.vendorName}`}
                   />
                 </td>
-                <td className="px-4 py-2 text-muted">{new Date(row.incurredAt).toLocaleDateString()}</td>
+                <td className="px-4 py-2 text-muted">{formatDate(new Date(row.incurredAt))}</td>
                 <td className="px-4 py-2 text-ink">{row.vendorName}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-ink">{formatCents(row.amountCents)}</td>
               </tr>

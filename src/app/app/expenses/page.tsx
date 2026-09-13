@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { formatCents } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import NewExpenseForm from "./NewExpenseForm";
 import ExpenseAttachments from "./ExpenseAttachments";
 
@@ -52,7 +53,7 @@ export default async function ExpensesPage() {
                 <div>
                   <p className="text-sm font-medium text-ink">{e.vendorName}</p>
                   <p className="mt-0.5 text-xs text-muted">
-                    {e.category.name} · {e.incurredAt.toLocaleDateString()}
+                    {e.category.name} · {formatDate(e.incurredAt)}
                     {e.isRecurring && " · recurring"}
                   </p>
                 </div>

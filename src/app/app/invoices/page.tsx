@@ -3,6 +3,7 @@ import { getActiveBusinessContext } from "@/server/services/businesses";
 import { prisma } from "@/lib/db";
 import { balanceDueCents, isOverdue } from "@/server/services/invoices";
 import { formatCents } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 import StatusChip from "@/components/StatusChip";
 
 export default async function InvoicesPage() {
@@ -53,7 +54,7 @@ export default async function InvoicesPage() {
                   {inv.number} <span className="text-muted">·</span> {inv.customer.name}
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
-                  Due {inv.dueDate.toLocaleDateString()}
+                  Due {formatDate(inv.dueDate)}
                   {overdue && <span className="ml-1.5 font-medium text-bad">Overdue</span>}
                 </p>
               </div>

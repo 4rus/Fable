@@ -1,4 +1,5 @@
 import { formatCentsDelta } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
 
 interface TransactionRow {
   id: string;
@@ -32,7 +33,7 @@ export default function RecentTransactions({ transactions }: { transactions: Tra
             <div className="min-w-0">
               <p className="truncate text-ink">{t.merchantName ?? t.description}</p>
               <p className="mt-0.5 text-xs text-muted">
-                {t.postedDate.toLocaleDateString()} · {t.financialAccount.name}
+                {formatDate(t.postedDate)} · {t.financialAccount.name}
                 {t.financialAccount.mask && ` ····${t.financialAccount.mask}`}
                 {t.pending && " · Pending"}
                 {t.category && ` · ${t.category.name}`}

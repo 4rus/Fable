@@ -6,16 +6,9 @@ import { getAllInsights, summarizeInsights } from "@/server/services/insights";
 import { narrateInsights } from "@/server/services/narration";
 import { getOnboardingStatus } from "@/server/services/onboarding";
 import { formatCentsCompact } from "@/lib/money";
+import { formatDateLong } from "@/lib/dates";
 import ThingsToDo from "@/components/ThingsToDo";
 import OnboardingChecklist from "@/components/OnboardingChecklist";
-
-function dateline(): string {
-  return new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
 
 export default async function DashboardPage() {
   const { business: maybeBusiness } = await getActiveBusinessContext();
@@ -55,7 +48,7 @@ export default async function DashboardPage() {
   return (
     <div className="max-w-2xl space-y-14">
       <div>
-        <p className="text-xs text-muted">{business.name} · {dateline()}</p>
+        <p className="text-xs text-muted">{business.name} · {formatDateLong(new Date())}</p>
 
         <p className="mt-5 font-serif text-[26px] leading-snug tracking-tight text-ink sm:text-[30px]">
           {headline}
@@ -119,9 +112,16 @@ export default async function DashboardPage() {
 }
 
 function decapitalize(s: string): string {
-  // Only lowercases when the string opens with a letter (most of our
-  // headlines open with a dollar amount or "You" — leave those alone).
-  if (/^[A-Z][a-z]/.test(s) && !s.startsWith("You")) {
+  // Only lowercases when the string opens with a letter — most headlines
+  // open with a dollar amount, which this regex already leaves alone.
+  // Phase O: this used to also exempt strings starting with "You" (e.g.
+  // getCashTrendInsight's "You brought in $X more than you spent"),
+  // reasoning that "You" reads fine capitalized. It doesn't — "But You
+  // brought in..." reads as a broken sentence, while the near-identical
+  // "Your spending is running 68% lower..." was never exempted and
+  // already read correctly as "But your spending...". Removed the
+  // special case so both are handled the same way.
+  if (/^[A-Z][a-z]/.test(s)) {
     return s.charAt(0).toLowerCase() + s.slice(1);
   }
   return s;
