@@ -48,7 +48,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Matches local dev (Node 24). Node 20 was tried first and
+          # failed real CI runs: @supabase/supabase-js needs a native
+          # `WebSocket` global that Node 20 doesn't have (added in Node
+          # 22+), and GitHub's Node 20 runners are being deprecated
+          # anyway — see the annotation this surfaced as on the first
+          # real run of this workflow.
+          node-version: 24
           cache: npm
 
       - name: Install dependencies
