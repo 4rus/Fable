@@ -146,6 +146,21 @@ model Business {
   startingCashCents Int      @default(0)
   startingCashAsOf  DateTime @default(now())
 
+  // ── Onboarding (Phase N) ─────────────────────────────────────────────
+  // Both nullable, both purely UX state — never read by insights.ts or
+  // forecast.ts, which treat startingCashCents=0 as a legitimate real
+  // value regardless of whether a human ever confirmed it. See
+  // src/server/services/onboarding.ts for how these combine with live
+  // data (any bank connection/invoice/expense) into one derived
+  // "is onboarding done" status — most of that status needs no stored
+  // state at all, these two columns exist only for the two paths that
+  // leave no other trace: explicitly skipping the guided setup screen,
+  // and explicitly confirming a starting cash balance (including
+  // confirming it's genuinely $0, which is indistinguishable from
+  // "never touched" without a separate flag).
+  onboardingSkippedAt      DateTime?
+  startingCashConfirmedAt  DateTime?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
