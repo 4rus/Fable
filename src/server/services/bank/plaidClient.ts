@@ -60,9 +60,16 @@ export async function createLinkToken(clientUserId: string): Promise<string> {
     user: { client_user_id: clientUserId },
     client_name: "Fable",
     products: [Products.Transactions],
-    // US + Canada — Fable's stated market. Add country codes deliberately,
+    // Canada + US — Fable's stated market. Add country codes deliberately,
     // not speculatively; each one changes which institutions Link shows.
-    country_codes: [CountryCode.Us, CountryCode.Ca],
+    // NOTE (feature request, 2026-09): Canada listed first because more of
+    // Fable's users bank there, but this is a real, honest limit worth
+    // remembering — Plaid Link's institution list is Plaid's own
+    // search/relevance UI, not a static list this app renders. Putting CA
+    // first here nudges Link's own ranking toward Canadian institutions;
+    // it does NOT guarantee "all Canadian banks appear before all US
+    // banks" — Plaid doesn't expose a hard sort-by-country option.
+    country_codes: [CountryCode.Ca, CountryCode.Us],
     language: "en",
     // Registers the Item for real-time sync webhooks (Phase F) — only
     // when a public URL is actually configured. Without it, Plaid never
@@ -135,7 +142,7 @@ export async function getConnectionInfo(accessToken: string): Promise<ProviderCo
     try {
       const instResponse = await client.institutionsGetById({
         institution_id: institutionId,
-        country_codes: [CountryCode.Us, CountryCode.Ca],
+        country_codes: [CountryCode.Ca, CountryCode.Us],
       });
       institutionName = instResponse.data.institution.name;
     } catch {

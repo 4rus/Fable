@@ -322,6 +322,19 @@ debits/credits, no balance sheet. This is a deliberate scope decision, not
 a shortcut — it's honest about what it is, and nothing here can silently
 drift out of balance the way a half-implemented double-entry system could.
 
+**Starter categories:** a brand-new business gets a starter set of 18
+categories (`DEFAULT_CATEGORIES` in `src/server/services/businesses.ts`)
+covering what a small service business actually sees on a bank statement
+— expanded 2026-09 from an original thin set of 9. This only affects
+*new* businesses going forward; existing businesses keep whatever
+categories they already have (including ones since renamed or deleted).
+Categories are always just regular editable rows, not a fixed enum — a
+few of the names (e.g. "Software & Subscriptions", "Insurance") are also
+matched by `KEYWORD_RULES` in
+`src/server/services/bank/categorization.ts` for bank-transaction
+suggestions; renaming one of those disables its keyword suggestion by
+design.
+
 Enum-shaped columns (`Invoice.status`, `Membership.role`, etc.) are plain
 `String` in the schema rather than native Postgres/Prisma enums — this
 predates the Postgres migration (the schema used to also run on SQLite,
@@ -449,6 +462,14 @@ no business verification required. Moving to Production (real banks,
 real user data) is a separate Plaid application/approval step, not a
 code change.
 
+**Country ordering (feature request, 2026-09):** `createLinkToken`'s
+`country_codes` lists `CA` before `US` (Fable's user base leans
+Canadian). This is an honest, limited change — Plaid Link's institution
+list is Plaid's own search/relevance UI, not something this app renders
+or can force into a strict per-country sort order; listing `CA` first
+only nudges Link's own ranking, it doesn't guarantee every Canadian
+institution appears before every US one.
+
 **Content-Security-Policy note:** `next.config.mjs`'s CSP allowlists
 `cdn.plaid.com` (script + frame) and Plaid's API hosts (connect-src),
 per Plaid's own documented CSP requirements
@@ -533,6 +554,57 @@ authored by hand and applied with `prisma migrate deploy` (which doesn't
 need a shadow database) to work around it while developing, and the fix
 was verified by reproducing the shadow-db failure with/without that one
 line.
+
+## Receipt scanning (feature request, 2026-09)
+
+Real, calling the actual Anthropic API with a vision message — not a
+mock or a third-party OCR service. `src/server/services/receiptScan.ts`
+is the one place this happens; `generateFromImage` in
+`src/lib/ai/anthropic.ts` is the vision counterpart to `generateText`,
+same seam, same two honest states (`not_configured` /
+`generation_failed`).
+
+**Flow:** on `/app/expenses`, choosing a photo under "📷 Scan a receipt"
+calls a scan (never a form submission) that reads the vendor, total, and
+date off the image and pre-fills the visible Vendor/Amount/Date fields —
+the user always reviews and can edit before clicking "Add expense". The
+same file rides along with that real submission so the receipt gets
+attached to the expense it creates in one save. Nothing is ever written
+to the database from the scan step itself.
+
+**Category suggestion reuses the existing bank-transaction merchant-rule
+engine** (`categorizeBySavedRule` / `suggestCategoryForTransaction` in
+`src/server/services/bank/categorization.ts`) rather than asking Claude
+to guess a category — deterministic, and it gets smarter over time the
+same way bank-transaction categorization already does (a business's own
+past manual picks teach it), instead of a second independent guesser
+that could disagree with the first.
+
+**Validation, not blind trust:** the model's JSON response is
+schema-checked (amount bounded to the same $10M sanity ceiling used
+everywhere else in the app, date coerced/rejected if unparseable), a
+future-dated misread is clamped to today rather than saved as-is, and an
+unreadable/non-receipt image is reported honestly rather than producing
+a fabricated draft. Only JPEG/PNG are supported today — PDF receipts
+aren't read automatically yet (documented gap, not silently dropped; a
+PDF can still be attached to an expense by hand as before).
+
+**Testing:** `tests/receipt-scan.test.ts` — the `not_configured` and
+file-validation paths run for real (no network); the extraction/
+validation/category-suggestion logic is tested with a mocked
+`generateFromImage` response (deterministic, no network dependency).
+Manually verified against the real Anthropic API with a real generated
+receipt image (vendor, total, and date all read correctly).
+
+## Welcome email (feature request, 2026-09)
+
+Real, sent through the same `src/lib/email.ts` (Resend) path as every
+other email in the app — `src/server/services/welcomeEmail.ts`, fired
+once right after `signUp()` succeeds
+(`src/server/actions/auth.ts`). Deliberately best-effort: a missing
+`RESEND_API_KEY` or a delivery failure is logged but never fails signup
+or is surfaced to the user, since the account already exists by the time
+it runs.
 
 ## Deployment (Phase C)
 

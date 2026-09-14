@@ -59,15 +59,37 @@ export async function getActiveBusinessContext() {
   return { userId, userEmail, businesses, business };
 }
 
+/**
+ * Expanded 2026-09 from the original 9-category starter set (feature
+ * request: the original list was thin — "these aren't that common").
+ * Modeled on the categories a small service business actually sees on a
+ * bank statement / Schedule C, not an exhaustive chart of accounts.
+ * Additive only — existing businesses keep whatever categories they
+ * already have (including ones a user has since renamed or deleted);
+ * this only changes what a BRAND NEW business starts with. Category
+ * names are also matched by KEYWORD_RULES in
+ * src/server/services/bank/categorization.ts — renaming one of these
+ * silently disables the keyword suggestions for it, which is by design
+ * (isSystem categories are still just regular rows a user can edit).
+ */
 const DEFAULT_CATEGORIES: { name: string; type: "INCOME" | "EXPENSE" }[] = [
   { name: "Sales", type: "INCOME" },
+  { name: "Other Income", type: "INCOME" },
   { name: "Supplies", type: "EXPENSE" },
+  { name: "Office Expenses", type: "EXPENSE" },
   { name: "Rent", type: "EXPENSE" },
+  { name: "Utilities", type: "EXPENSE" },
   { name: "Software & Subscriptions", type: "EXPENSE" },
   { name: "Payroll & Contractors", type: "EXPENSE" },
   { name: "Insurance", type: "EXPENSE" },
   { name: "Vehicle & Fuel", type: "EXPENSE" },
   { name: "Marketing", type: "EXPENSE" },
+  { name: "Meals & Entertainment", type: "EXPENSE" },
+  { name: "Travel", type: "EXPENSE" },
+  { name: "Professional Services", type: "EXPENSE" },
+  { name: "Bank & Card Fees", type: "EXPENSE" },
+  { name: "Repairs & Maintenance", type: "EXPENSE" },
+  { name: "Taxes & Licenses", type: "EXPENSE" },
   { name: "Other", type: "EXPENSE" },
 ];
 

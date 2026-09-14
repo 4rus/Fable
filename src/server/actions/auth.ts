@@ -12,6 +12,7 @@ import {
   InvalidResetTokenError,
 } from "@/server/services/password-reset";
 import { sendEmail } from "@/lib/email";
+import { sendWelcomeEmail } from "@/server/services/welcomeEmail";
 
 export type SignupFormState = { error?: string };
 
@@ -50,6 +51,19 @@ export async function signupAction(
     if (err instanceof EmailInUseError) return { error: err.message };
     logError("signup failed", err);
     return { error: "Something went wrong creating your account. Please try again." };
+  }
+
+  // Best-effort, never blocks signup — the account already exists by this
+  // point. A missing RESEND_API_KEY or a send failure is logged, not
+  // surfaced to the user (same "not_configured" pattern as every other
+  // email in the app — see src/lib/email.ts).
+  try {
+    const result = await sendWelcomeEmail({ to: parsed.data.email, name: parsed.data.name });
+    if (!result.sent && result.reason === "send_failed") {
+      logError("welcome email send failed", new Error(result.message));
+    }
+  } catch (err) {
+    logError("welcome email threw", err);
   }
 
   redirect("/login?created=1");
