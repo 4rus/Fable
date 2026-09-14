@@ -110,7 +110,11 @@ test("signup → invoice → payment → insight", async ({ page }) => {
 
     // Real PNG magic bytes — the upload path sniffs actual file content,
     // not the claimed filename/mimeType, so this has to be genuine.
-    await page.locator('input[type="file"]').setInputFiles({
+    // Targeted by its "+ Add receipt" label specifically: the page now
+    // also has a "📷 Scan a receipt" file input (receipt-scan feature,
+    // 2026-09) on the still-empty new-expense form above this row, so a
+    // bare input[type="file"] locator is ambiguous.
+    await page.getByLabel("+ Add receipt").setInputFiles({
       name: "receipt.png",
       mimeType: "image/png",
       buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),

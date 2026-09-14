@@ -38,6 +38,11 @@ const KEYWORD_RULES: { pattern: RegExp; categoryName: string }[] = [
   { pattern: /\b(gusto|adp payroll|paychex|rippling)\b/i, categoryName: "Payroll & Contractors" },
   { pattern: /\b(rent|property management|leasing)\b/i, categoryName: "Rent" },
   { pattern: /\b(staples|office depot|costco|home depot|lowes)\b/i, categoryName: "Supplies" },
+  { pattern: /\b(electric|hydro|water utility|gas utility|internet|comcast|xfinity|rogers|bell canada|telus)\b/i, categoryName: "Utilities" },
+  { pattern: /\b(uber|lyft|delta|united airlines|air canada|marriott|hilton|airbnb|hotel)\b/i, categoryName: "Travel" },
+  { pattern: /\b(doordash|grubhub|uber eats|restaurant|starbucks|coffee)\b/i, categoryName: "Meals & Entertainment" },
+  { pattern: /\b(lawyer|attorney|legal fees|accountant|bookkeeping|cpa)\b/i, categoryName: "Professional Services" },
+  { pattern: /\b(overdraft fee|monthly maintenance fee|wire fee|atm fee|interchange fee)\b/i, categoryName: "Bank & Card Fees" },
 ];
 
 /** Normalizes a merchant name / raw description into a stable key: lower-
