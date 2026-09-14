@@ -7,9 +7,17 @@ import { getCurrentCashCents, computeForecast, customerOnTimeRate } from "@/serv
 describe("current cash calculation", () => {
   it("starts from startingCashCents and adds payments, subtracts expenses after that date", async () => {
     const business = await createTestBusiness();
+    // startingCashConfirmedAt set — this is a REAL confirmed snapshot
+    // (Phase N), which is what makes the day-level cutoff below apply at
+    // all. See the "never confirmed" tests further down for the
+    // opposite, equally real case.
     await prisma.business.update({
       where: { id: business.id },
-      data: { startingCashCents: 100_000, startingCashAsOf: new Date(Date.now() - 10 * 86_400_000) },
+      data: {
+        startingCashCents: 100_000,
+        startingCashAsOf: new Date(Date.now() - 10 * 86_400_000),
+        startingCashConfirmedAt: new Date(),
+      },
     });
     const customer = await createTestCustomer(business.id);
     const invoice = await createInvoice({
@@ -33,7 +41,10 @@ describe("current cash calculation", () => {
   it("ignores payments/expenses dated before the starting-cash cutoff (they're already baked into the starting figure)", async () => {
     const business = await createTestBusiness();
     const asOf = new Date();
-    await prisma.business.update({ where: { id: business.id }, data: { startingCashCents: 50_000, startingCashAsOf: asOf } });
+    await prisma.business.update({
+      where: { id: business.id },
+      data: { startingCashCents: 50_000, startingCashAsOf: asOf, startingCashConfirmedAt: new Date() },
+    });
     const customer = await createTestCustomer(business.id);
     const invoice = await createInvoice({
       businessId: business.id,
@@ -49,6 +60,81 @@ describe("current cash calculation", () => {
 
     const cash = await getCurrentCashCents(business.id);
     expect(cash).toBe(50_000);
+  });
+
+  it("a CONFIRMED starting balance excludes its ENTIRE calendar day, not just the exact timestamp it was saved at (Phase Q)", async () => {
+    // Real bug, found live: a starting balance "as of Sep 14" (saved at,
+    // say, 2:46:29 PM) previously only excluded transactions strictly
+    // BEFORE that exact second — a payment recorded the same day via the
+    // UI's date-only picker (which parses as UTC midnight, always
+    // earlier than any same-day timestamp) fell on the wrong side of
+    // that line and was silently excluded from "cash available today"
+    // even though it happened after the snapshot was taken.
+    const business = await createTestBusiness();
+    const confirmedAfternoon = new Date();
+    confirmedAfternoon.setUTCHours(14, 46, 29, 0);
+    await prisma.business.update({
+      where: { id: business.id },
+      data: { startingCashCents: 10_000, startingCashAsOf: confirmedAfternoon, startingCashConfirmedAt: new Date() },
+    });
+    const customer = await createTestCustomer(business.id);
+    const invoice = await createInvoice({
+      businessId: business.id,
+      customerId: customer.id,
+      issueDate: new Date(),
+      dueDate: new Date(),
+      taxCents: 0,
+      lineItems: [{ description: "x", quantity: 1, unitPriceCents: 5_000 }],
+    });
+    await markInvoiceSent(business.id, invoice.id);
+    // Same calendar day as confirmedAfternoon, but parsed as UTC
+    // midnight (exactly what a date-only <input type="date"> produces) —
+    // earlier in clock time, but NOT a transaction that predates the
+    // snapshot in any meaningful sense.
+    const sameDayMidnight = new Date(confirmedAfternoon);
+    sameDayMidnight.setUTCHours(0, 0, 0, 0);
+    await recordPayment({
+      businessId: business.id,
+      invoiceId: invoice.id,
+      amountCents: 5_000,
+      method: "cash",
+      paidAt: sameDayMidnight,
+      idempotencyKey: "same-day-midnight",
+    });
+
+    // Still excluded — same calendar day as the confirmed snapshot.
+    expect(await getCurrentCashCents(business.id)).toBe(10_000);
+  });
+
+  it("a business that has NEVER confirmed a starting balance counts every payment/expense ever recorded, including same-day ones (Phase Q)", async () => {
+    // The default $0/creation-timestamp pair is a placeholder, not a real
+    // snapshot — there's nothing to avoid double-counting against, so
+    // the old day-boundary logic should never apply here at all. This is
+    // the exact scenario that broke live: a brand-new signup's first
+    // same-day payment must count in full.
+    const business = await createTestBusiness(); // startingCashConfirmedAt is null by default
+    const customer = await createTestCustomer(business.id);
+    const invoice = await createInvoice({
+      businessId: business.id,
+      customerId: customer.id,
+      issueDate: new Date(),
+      dueDate: new Date(),
+      taxCents: 0,
+      lineItems: [{ description: "x", quantity: 1, unitPriceCents: 550_000 }],
+    });
+    await markInvoiceSent(business.id, invoice.id);
+    const todayMidnightUtc = new Date();
+    todayMidnightUtc.setUTCHours(0, 0, 0, 0);
+    await recordPayment({
+      businessId: business.id,
+      invoiceId: invoice.id,
+      amountCents: 550_000,
+      method: "bank_transfer",
+      paidAt: todayMidnightUtc,
+      idempotencyKey: "never-confirmed-same-day",
+    });
+
+    expect(await getCurrentCashCents(business.id)).toBe(550_000);
   });
 });
 
