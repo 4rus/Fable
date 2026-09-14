@@ -144,10 +144,10 @@ export async function getExpenseTrendInsight(businessId: string): Promise<Insigh
 }
 
 export async function getCashTrendInsight(businessId: string): Promise<Insight | null> {
-  const business = await prisma.business.findUniqueOrThrow({
-    where: { id: businessId },
-    select: { startingCashCents: true, startingCashAsOf: true },
-  });
+  // Phase Q cleanup: this used to also fetch the business's
+  // startingCashCents/startingCashAsOf here, but never actually read
+  // either — dead code, an unnecessary query on every Overview load
+  // (this insight is 1 of ~9 run concurrently in getAllInsights).
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [recentPayments, recentExpenses] = await Promise.all([

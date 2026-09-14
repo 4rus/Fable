@@ -51,25 +51,31 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // (/app/setup, Phase N) rather than rendering the real dashboard.
     // Wait for the actual navigation rather than the default (short)
     // assertion poll, so a slow first-compile doesn't read as a login
-    // failure — /app/setup pulls in getActiveBusinessContext +
-    // getOnboardingStatus on top of Next dev's own on-demand compile of
-    // every module the route touches for the first time in this fresh
-    // server process, PLUS (Phase Q) middleware.ts now compiling and
-    // running on every single request for CSP nonce generation — a real,
-    // structural latency addition, not just more app code. 45s (raised
-    // from 30s after this step timed out once immediately following the
-    // middleware migration, then passed clean twice in a row — following
-    // this suite's own established pattern from Phase I: check for a
-    // genuinely-too-tight budget before assuming pure flakiness) without
-    // hiding an actual hang, which the overall 120s test timeout still
-    // catches.
-    await page.waitForURL(/\/app\/setup$/, { timeout: 45_000 });
+    // failure. 60s, set from REAL measured numbers (not a guess): with
+    // webServer's stdout/stderr now piped (see playwright.config.ts —
+    // added specifically to diagnose this), a failing run's own server
+    // log showed the actual chain — sign-in POST, then /app compiling
+    // (11.2s) and responding (14.7s total), a second /app hit (1.7s),
+    // then /app/setup ALSO cold-compiling for the first time in this
+    // fresh process (13.8s) and responding (17.5s total) — about 34s of
+    // real, sequential server time alone before Playwright's own
+    // navigation/render overhead on top, against a 45s budget that
+    // wasn't quite enough headroom. This app now compiles 4700+ modules
+    // for /app/setup alone in dev mode; middleware.ts (Phase Q) adds a
+    // smaller fixed amount on every request but isn't the dominant cost
+    // here — two back-to-back first-time route compiles in one
+    // navigation is. 60s leaves real margin over the ~34s measured
+    // floor without hiding an actual hang, which the overall 240s test
+    // timeout still catches. Same "check for a genuinely-too-tight
+    // budget, backed by real numbers, before assuming pure flakiness"
+    // approach this suite established in Phase I.
+    await page.waitForURL(/\/app\/setup$/, { timeout: 60_000 });
     await expect(page.getByText("Let's get Fable working for you.")).toBeVisible();
     // This journey exercises manual entry (customer/invoice/payment), not
     // the bank-connection path — skip the guided screen the same way a
     // real user choosing manual entry would.
     await page.getByRole("button", { name: "I'll do this manually" }).click();
-    await page.waitForURL(/\/app$/, { timeout: 30_000 });
+    await page.waitForURL(/\/app$/, { timeout: 60_000 });
   });
 
   await test.step("see an empty-state dashboard with the onboarding checklist", async () => {
@@ -141,10 +147,12 @@ test("signup → invoice → payment → insight", async ({ page }) => {
     // NOT /\/app\/invoices\/[a-z0-9]+$/ — "new" is itself all-lowercase and
     // matches that pattern, so waitForURL would resolve immediately against
     // the still-unsubmitted form instead of waiting for the real redirect.
-    // Invoice ids are cuids (25 chars); require a real one. 30s for the
-    // same reason as the /app wait above — this is /app/invoices/[id]'s
-    // own first cold compile in this fresh server process.
-    await page.waitForURL(/\/app\/invoices\/(?!new$)[a-z0-9]{20,}$/, { timeout: 30_000 });
+    // Invoice ids are cuids (25 chars); require a real one. 60s — see the
+    // /app/setup wait above for the real, measured-not-guessed reasoning
+    // (this app's dev-mode cold-compile cost has grown to ~34s for two
+    // back-to-back first-time route compiles; this step is the same
+    // class of first-time compile for /app/invoices/[id]).
+    await page.waitForURL(/\/app\/invoices\/(?!new$)[a-z0-9]{20,}$/, { timeout: 60_000 });
     invoiceUrl = page.url();
     await expect(page.getByText("$200.00").first()).toBeVisible();
   });

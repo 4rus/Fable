@@ -60,18 +60,50 @@ export interface ForecastDriver {
   amountCents: number;
 }
 
+/**
+ * Real bug found and fixed during Phase Q's final live walkthrough: a
+ * brand-new business defaults `startingCashCents` to 0 and
+ * `startingCashAsOf` to the EXACT business-creation timestamp (with a
+ * time component, e.g. 2:46:29 PM). A payment recorded the same day
+ * through the UI's date picker (`<input type="date">`) has no time
+ * component and parses as UTC midnight — which is BEFORE 2:46:29 PM the
+ * same day, so the old strict `paidAt > startingCashAsOf` filter
+ * silently excluded it. Reproduced live: a brand-new signup recorded a
+ * real $5,500 payment and the Overview page still showed "$0 available
+ * today" right next to an insight saying "You brought in $5,500..." —
+ * an internally inconsistent, confidence-destroying result for exactly
+ * the moment (a new user's first action) it's most likely to happen and
+ * most damaging to be wrong.
+ *
+ * The real fix isn't just "use >= instead of >": a `startingCashCents`
+ * that was NEVER explicitly confirmed (see Business.startingCashConfirmedAt,
+ * Phase N) isn't a real snapshot of anything — it's an untouched $0
+ * placeholder, and there is nothing to avoid double-counting against, so
+ * every payment/expense ever recorded should count, full stop. The
+ * day-level exclusion only makes sense once a business has a REAL
+ * confirmed starting balance "as of" a specific date — and even then,
+ * the exclusion should cover that entire calendar day (not just the
+ * exact second it was saved), since "as of Sep 14" means everything
+ * already reflected in that balance happened on or before Sep 14, not
+ * on or before the specific moment someone typed the number in.
+ */
 export async function getCurrentCashCents(businessId: string): Promise<number> {
   const business = await prisma.business.findUniqueOrThrow({
     where: { id: businessId },
-    select: { startingCashCents: true, startingCashAsOf: true },
+    select: { startingCashCents: true, startingCashAsOf: true, startingCashConfirmedAt: true },
   });
+
+  // No real snapshot exists yet — count everything, no cutoff at all.
+  // A confirmed balance excludes its own entire calendar day (not just
+  // the precise timestamp it happened to be saved at) — see comment above.
+  const cutoff = business.startingCashConfirmedAt ? startOfNextDay(business.startingCashAsOf) : null;
 
   const [payments, expenses] = await Promise.all([
     prisma.payment.findMany({
       where: {
         businessId,
         voidedAt: null,
-        paidAt: { gt: business.startingCashAsOf },
+        ...(cutoff ? { paidAt: { gte: cutoff } } : {}),
       },
       select: { amountCents: true },
     }),
@@ -79,7 +111,7 @@ export async function getCurrentCashCents(businessId: string): Promise<number> {
       where: {
         businessId,
         deletedAt: null,
-        incurredAt: { gt: business.startingCashAsOf },
+        ...(cutoff ? { incurredAt: { gte: cutoff } } : {}),
       },
       select: { amountCents: true },
     }),
@@ -88,6 +120,18 @@ export async function getCurrentCashCents(businessId: string): Promise<number> {
   const inflow = addCents(...payments.map((p) => p.amountCents));
   const outflow = addCents(...expenses.map((e) => e.amountCents));
   return addCents(business.startingCashCents, inflow) - outflow;
+}
+
+/** UTC, not local server time — `new Date("2026-09-14")` (what a
+ * date-only `<input type="date">` produces) already parses as UTC
+ * midnight, so this has to stay in the same UTC frame to correctly
+ * represent "the day after that calendar day" regardless of which
+ * timezone the server process itself happens to run in (dev machine vs.
+ * Vercel, which run different timezones). */
+function startOfNextDay(date: Date): Date {
+  const next = new Date(date);
+  next.setUTCHours(24, 0, 0, 0);
+  return next;
 }
 
 export async function computeForecast(

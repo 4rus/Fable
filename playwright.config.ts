@@ -45,6 +45,16 @@ export default defineConfig({
     // could be a dev server pointed at a developer's real dev.db.
     reuseExistingServer: false,
     timeout: 60_000,
+    // Phase Q: piped rather than the default "ignore" — this is what let
+    // a real failure get root-caused with actual server-side timing
+    // (compile durations, response times) instead of guessing from the
+    // browser side alone. Prints during every run (compile/request
+    // lines interleaved with the test reporter's own output), not just
+    // failures — a bit more console noise on a normal green run, worth
+    // it for being able to diagnose a timeout with real numbers instead
+    // of another guess-and-bump cycle.
+    stdout: "pipe",
+    stderr: "pipe",
     env: {
       PORT: String(PORT),
       DATABASE_URL: E2E_DATABASE_URL,
@@ -58,6 +68,22 @@ export default defineConfig({
       // developer's real .env has a live key — E2E must never depend on
       // it or make real outbound API calls.
       RESEND_API_KEY: "",
+      // Real bug found in Phase Q's own final verification pass: without
+      // this, e2e inherits the developer's real Upstash credentials from
+      // .env and every run's one real signup shares the SAME external
+      // Redis rate-limit bucket (keyed by IP, and every Playwright-driven
+      // request comes from this same local machine) — unlike the old
+      // in-memory limiter, which reset for free every run since a fresh
+      // server process means a fresh empty counter. A handful of e2e
+      // runs in the same hour silently exhausts the real 5-signups-per-
+      // hour limit, and the test starts failing for a reason that has
+      // nothing to do with the app being broken. Forced empty here so
+      // e2e always gets the fast, always-fresh in-memory fallback,
+      // matching this whole webServer block's existing isolation
+      // philosophy (fresh schema every run, fake secrets, no real
+      // external side effects).
+      UPSTASH_REDIS_REST_URL: "",
+      UPSTASH_REDIS_REST_TOKEN: "",
     },
   },
 });
